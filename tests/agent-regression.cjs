@@ -7,6 +7,7 @@ const { stripTypeScriptTypes } = require('node:module');
 const source = ['aurora-engine.ts','agent-jobs.ts','validation-workflow.ts','plan-validation.ts','undo-commit.ts','index.ts'].map(f => stripTypeScriptTypes(fs.readFileSync(path.join(__dirname, '../supabase/functions/github-ai-edit/'+f), 'utf8').replace(/^import .*;\n/gm, '').replace(/^export \{.*\};\n/gm,'').replace(/^export /gm,''))).join('\n');
 async function scenario(mode = 'complete', requireValidation = false, execution = undefined) {
   const files = { 'src/a.js': 'const title = "old";', 'src/b.js': 'const enabled = false;' };
+  if(mode==='engine-discover')files['src/account/service.js']='const session = true;';
   const limited=['budget-finish','budget-stop','budget-partial','duplicate-reads','reselect-cache'].includes(mode);
   if(limited){for(const name of ['aa','ab','ac','ad'])files['src/'+name+'.js']='const placeholder=0;';for(let i=0;i<4;i++)files['src/extra/x'+i+'.js']='const extra'+i+'=0;';}
   const calls = [];
@@ -34,8 +35,8 @@ async function scenario(mode = 'complete', requireValidation = false, execution 
         if(system.includes('REVISOR INDEPENDENTE')) {
           reviewRound++;const review=JSON.parse(user.split("\n\nResponda APENAS")[0]);assert(review.files.some(f=>f.path==='src/a.js'&&f.before.includes('old')));
           result=mode==='engine-invalid'?{verdict:'pass',findings:'wrong'}:
-            (mode==='engine-blocked'||(mode==='engine-repair'&&reviewRound===1))?{verdict:'block',findings:[{path:'src/a.js',severity:'blocking',message:'O título deve ser fixed para atender ao pedido.'}]}:{verdict:'pass',findings:[]};
-        }else if(system.includes('mapa de arquivos')) {selectorCount++;result={files:[mode==='reselect-cache'&&selectorCount>1?'src/b.js':'src/a.js'],tasks:['Ativar opção','Alterar título e criar painel']};}
+            (mode==='engine-blocked'||((mode==='engine-repair'||mode==='engine-discover')&&reviewRound===1))?{verdict:'block',findings:[{path:'src/a.js',severity:'blocking',message:'O título deve ser fixed para atender ao pedido.'}]}:{verdict:'pass',findings:[]};
+        }else if(system.includes('INVESTIGADOR DE RECUPERAÇÃO')) {result={request_files:mode==='engine-discover'?['src/account/service.js']:[]};}else if(system.includes('mapa de arquivos')) {selectorCount++;result={files:[mode==='reselect-cache'&&selectorCount>1?'src/b.js':'src/a.js'],tasks:['Ativar opção','Alterar título e criar painel']};}
         else {
           editRound++;
           if(limited){
@@ -64,6 +65,7 @@ async function scenario(mode = 'complete', requireValidation = false, execution 
             result={files:[{path:'src/b.js',edits:[{old_text:'false',new_text:'true'}]}],tasks:[{id:'step-1',status:'prepared',files:['src/b.js']},{id:'step-2',status:'pending',files:[]}],continue_work:mode==='complete'||mode.startsWith('engine-')};
           } else {
             assert(user.includes('const enabled = true;'),'Next stage must read staged code');
+            if(mode==='engine-discover'&&editRound>3){assert(user.includes('const session = true;'));assert(user.includes('Revisão ainda pendente de correção'));assert(user.includes('old'));}
             result={files:[{path:'src/a.js',edits:[{old_text:'"old"',new_text:mode==='engine-repair'&&editRound>3?'"fixed"':'"new"'}]},{path:'src/new.js',content:'const panel = 1;'}],tasks:[{id:'step-1',status:'prepared',files:['src/b.js']},{id:'step-2',status:'prepared',files:['src/a.js','src/new.js']}],continue_work:false};
           }
         }
@@ -101,10 +103,11 @@ async function scenario(mode = 'complete', requireValidation = false, execution 
     if(mode==='reselect-cache'){assert.equal(r.selectorCount,2);assert.equal(r.data.agent.extra_reads,3);assert.equal(r.calls.filter(c=>c.url.includes('/contents/src/extra/x0.js')).length,1);}
   }
   r=await scenario('budget-stop');assert.equal(r.status,422);assert.equal(r.data.code,'READ_CONTEXT_INCOMPLETE');assert(!r.data.error.includes('Finalize'));assert.equal(r.selectorCount,1);assert.equal(r.quota,1);assert.equal(r.editRound,5);
-  for(const mode of ['engine-pass','engine-repair','engine-blocked','engine-invalid']) {
+  for(const mode of ['engine-pass','engine-repair','engine-discover','engine-blocked','engine-invalid']) {
     r=await scenario(mode);assert.equal(r.quota,1);assert(!r.calls.some(c=>c.url.includes('github.com')&&c.opts.method==='POST'));
     if(mode==='engine-blocked'){assert.equal(r.status,422);assert.equal(r.reviewRound,2);assert.equal(r.data.engine.review.status,'blocked');continue;}
     assert.equal(r.status,200,JSON.stringify(r.data));assert.equal(r.data.requires_validation,false,'Engine must not force CI');
+    if(mode==='engine-discover'){assert.equal(r.reviewRound,2);assert.equal(r.calls.filter(c=>c.url.includes('/contents/src/account/service.js')).length,1);}
     assert.equal(r.data.engine.usage.requests,r.calls.filter(c=>c.url.includes('api.deepseek.com')).length);assert(r.data.engine.usage.complete);
     if(mode==='engine-invalid'){assert(r.data.requires_manual_review);assert.equal(r.data.engine.review.status,'incomplete');}
     else {assert.equal(r.data.engine.review.status,'passed');if(mode==='engine-repair'){assert.equal(r.reviewRound,2);assert(r.data.files.find(f=>f.path==='src/a.js').content.includes('fixed'));assert(r.data.engine.events.some(e=>e.stage==='repairing'));}}
