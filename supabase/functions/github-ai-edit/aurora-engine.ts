@@ -21,7 +21,7 @@ export function validateAuroraSkills(raw: unknown): AuroraSkill[] {
   });
 }
 export function createAuroraEngine(body:any,deadline:number) {
-  const enabled=body.auroraEngine===true;
+  const enabled=true; // Motor padrão; preferências antigas não desativam a revisão.
   const custom=enabled?validateAuroraSkills(body.auroraSkills):[];
   const prompt=String(body.prompt||'');
   const wanted=new Set(['react','quality']);
@@ -55,6 +55,6 @@ export function createAuroraEngine(body:any,deadline:number) {
       } catch {review={status:'incomplete',findings:[],note:'O revisor não retornou uma avaliação válida. Revisão manual obrigatória.'};}
       stamp(review.status==='passed'?'review_passed':review.status==='blocked'?'review_blocked':'review_incomplete');return review;
     },
-    snapshot(){return enabled?{version:'1.0.0',skills:selected.map(({id,name,version})=>({id,name,version})),events:[...events],review,usage:{requests,metered_requests:metered,prompt_tokens:promptTokens,completion_tokens:completionTokens,complete:metered===requests},elapsed_ms:Date.now()-started,limits:{requests:12,tokens:250000,runtime_ms:110000},validation:'github_actions_required',self_update:'review_required'}:undefined;},
+    snapshot(){return enabled?{version:'1.0.0',skills:selected.map(({id,name,version})=>({id,name,version})),events:[...events],review,usage:{requests,metered_requests:metered,prompt_tokens:promptTokens,completion_tokens:completionTokens,complete:metered===requests},elapsed_ms:Date.now()-started,limits:{requests:12,tokens:250000,runtime_ms:110000},validation:'syntax_and_imports',self_update:'review_required'}:undefined;},
   };
 }

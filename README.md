@@ -1,3 +1,5 @@
+> Atualização 3.5.1: motor Aurora sempre ativo; skills nas configurações; novos comandos sem exigência de build/CI. Veja STATUS-3.5.1.md.
+
 # Vertex Pro — extensão e Motor Aurora
 
 Repositório privado da extensão Vertex Pro 3.5.0. Importação do pacote entregue em 07/10/2026, preservando seus 43 arquivos.

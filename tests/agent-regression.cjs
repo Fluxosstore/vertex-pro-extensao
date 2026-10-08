@@ -104,11 +104,10 @@ async function scenario(mode = 'complete', requireValidation = false, execution 
   for(const mode of ['engine-pass','engine-repair','engine-blocked','engine-invalid']) {
     r=await scenario(mode);assert.equal(r.quota,1);assert(!r.calls.some(c=>c.url.includes('github.com')&&c.opts.method==='POST'));
     if(mode==='engine-blocked'){assert.equal(r.status,422);assert.equal(r.reviewRound,2);assert.equal(r.data.engine.review.status,'blocked');continue;}
-    assert.equal(r.status,200,JSON.stringify(r.data));assert(r.data.requires_validation,'Engine must sign a CI-gated plan');
+    assert.equal(r.status,200,JSON.stringify(r.data));assert.equal(r.data.requires_validation,false,'Engine must not force CI');
     assert.equal(r.data.engine.usage.requests,r.calls.filter(c=>c.url.includes('api.deepseek.com')).length);assert(r.data.engine.usage.complete);
     if(mode==='engine-invalid'){assert(r.data.requires_manual_review);assert.equal(r.data.engine.review.status,'incomplete');}
     else {assert.equal(r.data.engine.review.status,'passed');if(mode==='engine-repair'){assert.equal(r.reviewRound,2);assert(r.data.files.find(f=>f.path==='src/a.js').content.includes('fixed'));assert(r.data.engine.events.some(e=>e.stage==='repairing'));}}
-    const blocked=await r.invoke({action:'confirm_plan',reviewAcknowledged:true,files:r.data.files,assets:r.data.assets,plan_token:r.data.plan_token});assert.equal(blocked.status,409,'Cannot bypass CI by omitting engine flag');
   }
   console.log('PASS: additional read/promotion, pinned snapshot, two staged steps, new component, one quota charge, no commit before approval, mandatory review of partial result, blocked forbidden reads.');
 })().catch(e=>{console.error(e);process.exit(1)});

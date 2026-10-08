@@ -285,6 +285,16 @@
             </div>
           </div>
 
+        <details class="next-engine-settings" id="nextEngineSettings">
+          <summary>Skills da Aurora</summary>
+          <p>O motor Aurora está sempre ativo. Gerencie aqui as skills personalizadas deste projeto.</p>
+          <small>Skills internas: interface, autenticação, dados, imagens e qualidade. Ativadas conforme o pedido.</small>
+          <div id="nextEngineSkills"></div>
+          <div class="next-job-actions"><button type="button" id="nextSkillInstall">Instalar skill JSON</button><button type="button" id="nextSkillExample">Baixar modelo</button></div>
+          <input type="file" id="nextSkillFile" accept=".json,application/json" hidden>
+          <span id="nextSkillStatus" role="status"></span>
+        </details>
+
           <!-- BYOK: cliente pode usar a própria chave de API em vez da
                nossa OpenRouter — o custo da chamada passa a ser dele. -->
           <div class="next-prefs-box">
@@ -323,17 +333,6 @@
             <span class="next-dock-plano-sub">A Aurora só propõe o que vai mudar — você aprova antes de commitar</span>
           </div>
         </div>
-        <details class="next-engine-settings" id="nextEngineSettings">
-          <summary>Motor Aurora · skills e revisão</summary>
-          <label class="next-ci-toggle"><input type="checkbox" id="nextEngineToggle" checked> Ativar motor Aurora</label>
-          <p>Seleciona skills, revisa as alterações e exige validação de build antes da aprovação. Executa os testes configurados no projeto. A primeira validação pode pedir instalação do workflow no GitHub.</p>
-          <small>Skills internas: interface, autenticação, dados, imagens e qualidade. Ativadas conforme o pedido.</small>
-          <div id="nextEngineSkills"></div>
-          <div class="next-job-actions"><button type="button" id="nextSkillInstall">Instalar skill JSON</button><button type="button" id="nextSkillExample">Baixar modelo</button></div>
-          <input type="file" id="nextSkillFile" accept=".json,application/json" hidden>
-          <span id="nextSkillStatus" role="status"></span>
-        </details>
-        <label class="next-ci-toggle"><input type="checkbox" id="nextBuildToggle"> Build e testes antes de publicar</label>
         <div class="next-memory-row"><span id="nextMemoryStatus">Contexto por projeto</span><button type="button" id="nextMemoryClear">Limpar contexto</button></div>
         <div id="nextUndoArea" class="next-undo-area" hidden></div>
         <div class="next-dock-chat-messages" id="nextDockChatMessages">
@@ -800,11 +799,7 @@
       p.requiresValidation = true;
       const action = btn.classList.contains('next-plan-setup') ? 'validation_setup' : btn.classList.contains('next-plan-check') ? 'validation_status' : 'validation_start';
       await planRequest(p,action,action === 'validation_setup' ? {setupAcknowledged:true} : {});
-      if (action === 'validation_setup' || action === 'validation_start') {
-        validarBuildAtivo = true;
-        root.querySelector('#nextBuildToggle').checked = true;
-        await chrome.storage.local.set({vertex_validate_build:true});
-      }
+
     } catch(e) {p.error = e.message || String(e);}
     p.busy = false;
     wrap.innerHTML = planControls(p);
@@ -821,36 +816,11 @@
   // Planos pendentes de aprovação (Modo Planejamento) — guarda o conteúdo
   // exato gerado pela IA, pra "Aplicar" commitar sem chamar a IA de novo.
   const pendingPlans = {};
-  let validarBuildAtivo = false;
-  root.querySelector('#nextBuildToggle')?.addEventListener('change',e=>{
-    validarBuildAtivo = e.target.checked;
-    chrome.storage.local.set({vertex_validate_build:validarBuildAtivo}).catch(()=>{});
-  });
-  chrome.storage.local.get('vertex_validate_build').then(r=>{
-    validarBuildAtivo = r.vertex_validate_build === true;
-    syncEngineControls();
-  }).catch(()=>{});
-  let auroraEngineActive=true;
-  function syncEngineControls() {
-    root.querySelector('#nextEngineToggle').checked=auroraEngineActive;
-    const build=root.querySelector('#nextBuildToggle');
-    build.disabled=auroraEngineActive;
-    build.checked=auroraEngineActive || validarBuildAtivo;
-  }
-  const enginePreferencesReady=chrome.storage.local.get('vertex_aurora_engine').then(r=>{
-    auroraEngineActive=r.vertex_aurora_engine!==false;syncEngineControls();
-  }).catch(()=>syncEngineControls());
-  root.querySelector('#nextEngineToggle')?.addEventListener('change',async e=>{
-    auroraEngineActive=e.target.checked;syncEngineControls();
-    await chrome.storage.local.set({vertex_aurora_engine:auroraEngineActive});
-  });
   async function engineSkillKey() {
     if(!ghActiveRepo || repoResolvedProjectKey!==getProjectContextKey())throw Error('Conecte o repositório deste projeto para gerenciar skills.');
     return 'vertex_aurora_skills_'+await planOwner()+':'+ghActiveRepo+':'+getProjectContextKey();
   }
   async function readEngineOptions() {
-    await enginePreferencesReady;
-    if(!auroraEngineActive)return {auroraEngine:false};
     const key=await engineSkillKey(),r=await chrome.storage.local.get(key);
     return {auroraEngine:true,auroraSkills:globalThis.VertexAuroraEngine.validate(r[key] || [])};
   }
@@ -2976,7 +2946,7 @@
     }
     try {
       const {job}=await jobRequest(ticket,'job_diagnostic');
-      const report=['Vertex Pro 3.5.0',`Comando: ${job.id}`,`Projeto: ${job.repo}`,`Estado: ${job.status}`,`Etapa: ${job.stage}`,`Início: ${job.created_at}`,`Atualização: ${job.updated_at}`,`Código: ${job.error_code || '-'}`,`Erro: ${job.error_message || '-'}`,
+      const report=['Vertex Pro 3.5.1',`Comando: ${job.id}`,`Projeto: ${job.repo}`,`Estado: ${job.status}`,`Etapa: ${job.stage}`,`Início: ${job.created_at}`,`Atualização: ${job.updated_at}`,`Código: ${job.error_code || '-'}`,`Erro: ${job.error_message || '-'}`,
         ...(job.events || []).map(x=>`${x.at}: ${x.stage}`)].join('\n');
       try {await navigator.clipboard.writeText(report);} catch(_) {
         const input=document.createElement('textarea');input.value=report;input.style.cssText='position:fixed;left:-9999px;top:0';document.body.appendChild(input);input.select();
@@ -3016,7 +2986,7 @@
     }
 
     const op = { abort: new AbortController(), canceled: false, completed: false, timedOut: false, phase: 'generating',
-      fromComposer, prompt, manualApproval: !!resumeJob || (isDocked() && (modoPlanoAtivo || validarBuildAtivo)), requireValidation:isDocked() && validarBuildAtivo,
+      fromComposer, prompt, manualApproval: !!resumeJob || (isDocked() && modoPlanoAtivo), requireValidation:false,
       projectKey: getProjectContextKey(), repo: ghActiveRepo, memoryScope };
     activeEdit = op;
     ghSendBtn.disabled = false;
@@ -3047,7 +3017,7 @@
           modoPlano: op.manualApproval,
           deferCommit: true,
           ...engineOptions,
-          requireValidation: op.requireValidation || engineOptions.auroraEngine===true,
+          requireValidation: false,
           // O texto desta mensagem já está em `prompt`, não repeti-lo no histórico.
           chatHistory: isDocked() ? (fromComposer && auroraHistory.at(-1)?.role === 'user' && auroraHistory.at(-1)?.content === (prompt || '[Imagem anexada]').slice(0, 500)
             ? auroraHistory.slice(0, -1) : auroraHistory) : undefined,

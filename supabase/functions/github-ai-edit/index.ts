@@ -713,7 +713,6 @@ async function handleCommand(req: Request, execution?: any, parsedBody?: any): P
     let engine;
     try { engine = createAuroraEngine(body,requestDeadline); }
     catch (e) { return json({ok:false,code:"INVALID_SKILL",error:e instanceof Error?e.message:String(e)},400); }
-    if(engine.enabled) body.requireValidation=true;
     const report = async (stage:string, quota?:any) => {engine.stamp(stage);await execution?.progress?.(stage,quota);};
     const askAI = async (m:string,s:string,u:string,j:boolean,images?:string[],strong?:boolean,maxTokens=8000,deadline=requestDeadline) => {
       engine.beginCall();return callAI(m,s,u,j,images,strong,maxTokens,deadline,usage=>engine.usage(usage));
