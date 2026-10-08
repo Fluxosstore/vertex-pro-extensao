@@ -8,7 +8,9 @@ const ui={};vm.createContext(ui);vm.runInContext(fs.readFileSync(path.join(__dir
   for(const invalid of [[{...skill,tools:['shell']}],[{...skill,instructions:'x'.repeat(2501)}],[skill,skill],[{...skill,id:'react'}]])assert.throws(()=>validate(invalid));
  }
  let engine=context.createAuroraEngine({auroraEngine:true,prompt:'Corrija login e usuário no banco',auroraSkills:[skill]},Date.now()+110000);
- assert(engine.snapshot().skills.some(s=>s.id==='auth'));assert(engine.snapshot().skills.some(s=>s.id==='data'));assert(engine.customContext.includes('subordinadas'));
+ assert(engine.snapshot().skills.some(s=>s.id==='auth'));assert(engine.snapshot().skills.some(s=>s.id==='data'));assert.equal(engine.customContext,'');assert(!engine.snapshot().skills.some(s=>s.id.startsWith('custom-')));
+ for(const id of ['reasoning','coding','debugging','design','seo','quality'])assert(engine.snapshot().skills.some(s=>s.id===id));
+ const defaults=context.createAuroraEngine({auroraEngine:false,auroraSkills:[{tools:['shell']}],prompt:'Troque o texto'},Date.now()+110000);assert(defaults.enabled);assert.equal(defaults.snapshot().skills.length,10);
  for(let i=0;i<12;i++){engine.beginCall();engine.usage({prompt_tokens:10,completion_tokens:5});}assert.throws(()=>engine.beginCall(),/orçamento/);assert.equal(engine.snapshot().usage.prompt_tokens,120);
  engine=context.createAuroraEngine({auroraEngine:true,prompt:'x'},Date.now()+1000);let calls=0;
  assert.equal((await engine.review([{path:'a',content:'x'}],{a:'y'},async()=>{calls++;return '{}'})).status,'incomplete');assert.equal(calls,0);

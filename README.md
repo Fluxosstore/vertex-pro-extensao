@@ -1,3 +1,5 @@
+> Atualização 3.5.2: catálogo de 10 skills padrão mantido pela equipe, sem instalação pelo cliente. Veja STATUS-3.5.2.md.
+
 > Atualização 3.5.1: motor Aurora sempre ativo; skills nas configurações; novos comandos sem exigência de build/CI. Veja STATUS-3.5.1.md.
 
 # Vertex Pro — extensão e Motor Aurora

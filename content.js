@@ -285,15 +285,7 @@
             </div>
           </div>
 
-        <details class="next-engine-settings" id="nextEngineSettings">
-          <summary>Skills da Aurora</summary>
-          <p>O motor Aurora está sempre ativo. Gerencie aqui as skills personalizadas deste projeto.</p>
-          <small>Skills internas: interface, autenticação, dados, imagens e qualidade. Ativadas conforme o pedido.</small>
-          <div id="nextEngineSkills"></div>
-          <div class="next-job-actions"><button type="button" id="nextSkillInstall">Instalar skill JSON</button><button type="button" id="nextSkillExample">Baixar modelo</button></div>
-          <input type="file" id="nextSkillFile" accept=".json,application/json" hidden>
-          <span id="nextSkillStatus" role="status"></span>
-        </details>
+
 
           <!-- BYOK: cliente pode usar a própria chave de API em vez da
                nossa OpenRouter — o custo da chamada passa a ser dele. -->
@@ -396,7 +388,7 @@
           <div class="next-popover" id="nextModelsPopover" style="display:none;">
             <div class="next-popover-label">Integrações</div>
             <button class="next-popover-item" title="GitHub" data-model="github">
-              <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.48 0-.24-.01-1.04-.01-1.89-2.78.61-3.37-1.21-3.37-1.21-.46-1.18-1.11-1.5-1.11-1.5-.91-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.55 2.34 1.1 2.91.84.09-.66.35-1.1.63-1.36-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05a9.29 9.29 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.8-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.48A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
+              <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.2.68-.22.68-.48 0-.24-.01-1.04-.01-1.89-2.78.61-3.37-1.21-3.37-1.21-.46-1.18-1.11-1.5-1.11-1.5-.91-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.55 2.34 1.1 2.91.84.09-.66.35-1.1.63-1.36-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05a9.29 9.29 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.8-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.48A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
               <span>GitHub</span>
             </button>
             <div class="next-popover-label" style="margin-top:2px;">GitHub abre em</div>
@@ -455,7 +447,7 @@
       <!-- Estado 1: sem conta GitHub conectada -->
       <div class="vtx-gh-state" id="vtxGhStateDisconnected" style="display:none;">
         <div class="vtx-gh-head">
-          <svg class="vtx-gh-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.48 0-.24-.01-1.04-.01-1.89-2.78.61-3.37-1.21-3.37-1.21-.46-1.18-1.11-1.5-1.11-1.5-.91-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.55 2.34 1.1 2.91.84.09-.66.35-1.1.63-1.36-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05a9.29 9.29 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.8-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.48A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
+          <svg class="vtx-gh-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.2.68-.22.68-.48 0-.24-.01-1.04-.01-1.89-2.78.61-3.37-1.21-3.37-1.21-.46-1.18-1.11-1.5-1.11-1.5-.91-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.55 2.34 1.1 2.91.84.09-.66.35-1.1.63-1.36-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05a9.29 9.29 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.8-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.48A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
           <span class="vtx-gh-head-text">Conecte o GitHub para editar via IA</span>
           <button class="vtx-gh-x" data-gh-close title="Fechar">×</button>
         </div>
@@ -480,7 +472,7 @@
       <!-- Estado 3: pronto para enviar comandos -->
       <div class="vtx-gh-state" id="vtxGhStateReady" style="display:none;">
         <div class="vtx-gh-head">
-          <svg class="vtx-gh-icon small" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.48 0-.24-.01-1.04-.01-1.89-2.78.61-3.37-1.21-3.37-1.21-.46-1.18-1.11-1.5-1.11-1.5-.91-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.55 2.34 1.1 2.91.84.09-.66.35-1.1.63-1.36-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05a9.29 9.29 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.8-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.48A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
+          <svg class="vtx-gh-icon small" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.2.68-.22.68-.48 0-.24-.01-1.04-.01-1.89-2.78.61-3.37-1.21-3.37-1.21-.46-1.18-1.11-1.5-1.11-1.5-.91-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.55 2.34 1.1 2.91.84.09-.66.35-1.1.63-1.36-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05a9.29 9.29 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.8-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.48A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
           <span class="vtx-gh-repo-name" id="vtxGhRepoName"></span>
           <button class="vtx-gh-switch" id="vtxGhChangeRepoBtn">Trocar</button>
           <button class="vtx-gh-x" data-gh-close title="Fechar">×</button>
@@ -816,47 +808,9 @@
   // Planos pendentes de aprovação (Modo Planejamento) — guarda o conteúdo
   // exato gerado pela IA, pra "Aplicar" commitar sem chamar a IA de novo.
   const pendingPlans = {};
-  async function engineSkillKey() {
-    if(!ghActiveRepo || repoResolvedProjectKey!==getProjectContextKey())throw Error('Conecte o repositório deste projeto para gerenciar skills.');
-    return 'vertex_aurora_skills_'+await planOwner()+':'+ghActiveRepo+':'+getProjectContextKey();
-  }
   async function readEngineOptions() {
-    const key=await engineSkillKey(),r=await chrome.storage.local.get(key);
-    return {auroraEngine:true,auroraSkills:globalThis.VertexAuroraEngine.validate(r[key] || [])};
+    return {auroraEngine:true}; // Skills padrão gerenciadas no servidor.
   }
-  async function showInstalledSkills() {
-    const key=await engineSkillKey(),r=await chrome.storage.local.get(key);
-    const skills=globalThis.VertexAuroraEngine.validate(r[key] || []);
-    if(key!==await engineSkillKey())return;
-    root.querySelector('#nextEngineSkills').innerHTML=skills.length?skills.map(s=>`<div class="next-engine-skill-row"><span>${escapeHtml(s.name)} · ${escapeHtml(s.version)}</span><button type="button" data-remove-skill="${s.id}" aria-label="Remover ${escapeHtml(s.name)}">×</button></div>`).join(''):'<small>Nenhuma skill personalizada neste projeto.</small>';
-  }
-  const skillStatus=message=>{root.querySelector('#nextSkillStatus').textContent=message;};
-  root.querySelector('#nextEngineSettings')?.addEventListener('toggle',e=>{
-    if(e.target.open)showInstalledSkills().catch(e=>skillStatus(e.message));
-  });
-  root.querySelector('#nextSkillInstall')?.addEventListener('click',()=>root.querySelector('#nextSkillFile').click());
-  root.querySelector('#nextSkillFile')?.addEventListener('change',async e=>{
-    try {
-      const file=e.target.files[0];if(!file)return;
-      if(file.size>16000)throw Error('O arquivo de skills deve ter no máximo 16 KB.');
-      const key=await engineSkillKey();
-      const raw=JSON.parse(await file.text());
-      const incoming=globalThis.VertexAuroraEngine.validate(Array.isArray(raw)?raw:[raw]);
-      const saved=await chrome.storage.local.get(key);
-      const skills=globalThis.VertexAuroraEngine.validate([...(saved[key]||[]).filter(s=>!incoming.some(n=>n.id===s.id)),...incoming]);
-      if(key!==await engineSkillKey())throw Error('O projeto mudou. Instale novamente no projeto desejado.');
-      await chrome.storage.local.set({[key]:skills});
-      await showInstalledSkills();skillStatus('Skill instalada neste projeto. Será usada nos próximos comandos.');
-    }catch(error){skillStatus(error.message);}finally{e.target.value='';}
-  });
-  root.querySelector('#nextEngineSkills')?.addEventListener('click',async e=>{
-    const button=e.target.closest('[data-remove-skill]');if(!button)return;
-    try{const key=await engineSkillKey(),saved=await chrome.storage.local.get(key);await chrome.storage.local.set({[key]:(saved[key]||[]).filter(s=>s.id!==button.dataset.removeSkill)});await showInstalledSkills();skillStatus('Skill removida.');}catch(error){skillStatus(error.message);}
-  });
-  root.querySelector('#nextSkillExample')?.addEventListener('click',()=>{
-    const url=URL.createObjectURL(new Blob([JSON.stringify(globalThis.VertexAuroraEngine.example,null,2)],{type:'application/json'}));
-    const a=document.createElement('a');a.href=url;a.download='aurora-skill.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
-  });
   let modoPlanoAtivo = false;
   chrome.storage.local.get('vertex_modo_plano').then((r) => {
     modoPlanoAtivo = r?.vertex_modo_plano === true;
@@ -1759,7 +1713,7 @@
     }
     historyList.innerHTML = commandHistory.map(h => {
       const icon = h.mode === 'github'
-        ? '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.48 0-.24-.01-1.04-.01-1.89-2.78.61-3.37-1.21-3.37-1.21-.46-1.18-1.11-1.5-1.11-1.5-.91-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.55 2.34 1.1 2.91.84.09-.66.35-1.1.63-1.36-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05a9.29 9.29 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.8-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.48A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>'
+        ? '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.2.68-.22.68-.48 0-.24-.01-1.04-.01-1.89-2.78.61-3.37-1.21-3.37-1.21-.46-1.18-1.11-1.5-1.11-1.5-.91-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.55 2.34 1.1 2.91.84.09-.66.35-1.1.63-1.36-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05a9.29 9.29 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.8-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.48A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>'
         : h.mode === 'lovable'
         ? '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 21s-6.7-4.35-9.3-8.1C.9 10.1 1.4 6.6 4.2 5c2.2-1.25 4.9-.6 6.3 1.3.4.5.7 1.1.9 1.7.2-.6.5-1.2.9-1.7 1.4-1.9 4.1-2.55 6.3-1.3 2.8 1.6 3.3 5.1 1.5 7.9C18.7 16.65 12 21 12 21z"/></svg>'
         : '<svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/></svg>';
@@ -2946,7 +2900,7 @@
     }
     try {
       const {job}=await jobRequest(ticket,'job_diagnostic');
-      const report=['Vertex Pro 3.5.1',`Comando: ${job.id}`,`Projeto: ${job.repo}`,`Estado: ${job.status}`,`Etapa: ${job.stage}`,`Início: ${job.created_at}`,`Atualização: ${job.updated_at}`,`Código: ${job.error_code || '-'}`,`Erro: ${job.error_message || '-'}`,
+      const report=['Vertex Pro 3.5.2',`Comando: ${job.id}`,`Projeto: ${job.repo}`,`Estado: ${job.status}`,`Etapa: ${job.stage}`,`Início: ${job.created_at}`,`Atualização: ${job.updated_at}`,`Código: ${job.error_code || '-'}`,`Erro: ${job.error_message || '-'}`,
         ...(job.events || []).map(x=>`${x.at}: ${x.stage}`)].join('\n');
       try {await navigator.clipboard.writeText(report);} catch(_) {
         const input=document.createElement('textarea');input.value=report;input.style.cssText='position:fixed;left:-9999px;top:0';document.body.appendChild(input);input.select();
