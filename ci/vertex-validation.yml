@@ -1,0 +1,81 @@
+name: Vertex validation
+run-name: Vertex validation ${{ inputs.validation_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Commit exato preparado pela Vertex
+        required: true
+        type: string
+      validation_id:
+        description: Identificador do plano
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: vertex-validation-${{ inputs.validation_id }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    name: Vertex build and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+    steps:
+      - name: Validate input
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          VALIDATION_ID: ${{ inputs.validation_id }}
+        run: |
+          [[ "$CANDIDATE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$VALIDATION_ID" =~ ^[a-f0-9]{32}$ ]]
+      - name: Checkout proposal
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          persist-credentials: false
+      - name: Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Inspect scripts
+        id: scripts
+        run: |
+          node <<'JS'
+          const fs = require('node:fs');
+          const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          if (p.packageManager && !p.packageManager.startsWith('npm@')) throw Error('Esta validação requer npm e package-lock.json na raiz.');
+          if (!fs.existsSync('package-lock.json')) throw Error('package-lock.json ausente; configure npm antes de validar.');
+          if (!p.scripts?.build) throw Error('Configure o script build no package.json.');
+          const test = p.scripts['test:ci'] ? 'test:ci' : p.scripts.test ? 'test' : '';
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `test_script=${test}\n`);
+          JS
+      - name: Dependencies
+        timeout-minutes: 5
+        run: npm ci --no-audit --no-fund
+      - name: Build
+        timeout-minutes: 5
+        run: npm run build
+      - name: Tests
+        if: ${{ success() && steps.scripts.outputs.test_script != '' }}
+        timeout-minutes: 5
+        env:
+          TEST_SCRIPT: ${{ steps.scripts.outputs.test_script }}
+        run: |
+          node <<'JS'
+          const {spawnSync} = require('node:child_process');
+          const fs = require('node:fs');
+          const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const script = process.env.TEST_SCRIPT;
+          if (!['test', 'test:ci'].includes(script)) throw Error('Script de teste inválido');
+          const args = ['run', script];
+          if (script === 'test' && /\bvitest\b/.test(p.scripts.test) && !/\b(?:run|--run)\b/.test(p.scripts.test)) args.push('--', '--run');
+          const result = spawnSync('npm', args, {stdio:'inherit', env:process.env});
+          process.exit(result.status ?? 1);
+          JS
+      - name: No tests configured
+        if: ${{ success() && steps.scripts.outputs.test_script == '' }}
+        run: echo 'Build executado. Este projeto não tem script de testes; testes não executados.' >> "$GITHUB_STEP_SUMMARY"

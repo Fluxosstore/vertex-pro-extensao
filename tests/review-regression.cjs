@@ -1,0 +1,7 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),path=require('node:path');const ctx={};vm.createContext(ctx);vm.runInContext(fs.readFileSync(path.join(__dirname,'../code-review.js'),'utf8'),ctx);const {diff,render}=ctx.VertexCodeReview;
+let d=diff('a\nb\nc','a\nx\nc');assert.equal(d.added,1);assert.equal(d.removed,1);assert(d.rows.some(r=>r.text==='b'&&r.type==='-'));assert(d.rows.some(r=>r.text==='x'&&r.type==='+'));
+d=diff(null,'a\nb');assert.equal(d.added,2);assert.equal(d.removed,0);d=diff('same','same');assert.equal(d.added+d.removed,0);
+const before=Array.from({length:800},(_,i)=>'old '+i).join('\n'),after=Array.from({length:800},(_,i)=>'new '+i).join('\n');d=diff(before,after);assert.equal(d.added,800);assert.equal(d.removed,800);
+let html=render([{path:'a.js',content:after}],{'a.js':before});assert(html.includes('Comparativo resumido'));assert(html.includes('old 799'));assert(html.includes('new 799'));assert(html.includes('Antes — conteúdo completo'));
+html=render([{path:'<img onerror=x>',content:'<script>alert(1)</script>'}],{'<img onerror=x>':null},[{path:'<svg onload=x>'}]);assert(!html.includes('<script>'));assert(!html.includes('<img'));assert(!html.includes('<svg'));assert(html.includes('&lt;script&gt;'));
+console.log('PASS: exact additions/removals, new file, unchanged file, bounded large diff with complete before/after, escaped source/path/assets.');
