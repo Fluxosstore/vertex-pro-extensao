@@ -94,7 +94,8 @@ export async function handleAgentJob(body: any, deps: any) {
   return {ok:true,job:publicJob(job),...(body.action==='job_status' && result ? {result:{...result,command_id:id,command_counted:job.quota_charged,daily_used:job.daily_used}} : {})};
 }
 function sanitizeError(value: string) {
-  return String(value).replace(/Bearer\s+\S+/gi,'Bearer [oculto]').replace(/\b(?:sk-|ghp_|gho_)[A-Za-z0-9_-]+/g,'[chave oculta]').slice(0,1000);
+  const clean=String(value).replace(/Bearer\s+\S+/gi,'Bearer [oculto]').replace(/\b(?:sk-|ghp_|gho_)[A-Za-z0-9_-]+/g,'[chave oculta]');
+  return clean.length>16000 ? clean.slice(0,16000)+'\n[Diagnóstico excedeu o limite; consulte os detalhes da revisão.]' : clean;
 }
 function publicJob(job: any) {
   return {id:job.id,status:job.status,stage:job.stage,repo:job.repo,branch:job.branch,project_key:job.project_key,

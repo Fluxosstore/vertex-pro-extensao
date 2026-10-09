@@ -1,3 +1,5 @@
+> Atualização 3.5.4: revisão proporcional, inventário de imagens e diagnóstico completo. Veja STATUS-3.5.4.md.
+
 > Atualização 3.5.3: investigação após rejeição e revisão com contexto das integrações. Veja STATUS-3.5.3.md.
 
 > Atualização 3.5.2: catálogo de 10 skills padrão mantido pela equipe, sem instalação pelo cliente. Veja STATUS-3.5.2.md.

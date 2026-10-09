@@ -1004,6 +1004,8 @@ Responda em JSON: {"intent": "conversa" ou "edicao", "resposta": "sua resposta e
       .filter((n: any) => n.type === "blob")
       .map((n: any) => n.path);
 
+    const assetPaths=[...new Set([...allPaths.filter(p=>/\.(png|jpe?g|webp|gif|avif|svg)$/i.test(p)),...imageAssets.map(a=>a.path)])];
+    const assetInventory={paths:assetPaths.slice(0,2500),complete:treeData.truncated!==true && assetPaths.length<=2500};
     const mentionedPaths = mentionedProjectPaths(prompt, allPaths);
     const candidatePaths = [...new Set([...mentionedPaths, ...allPaths.filter(isCandidatePath)])].slice(0, MAX_CANDIDATE_PATHS);
     if (candidatePaths.length === 0) {
@@ -1270,7 +1272,7 @@ Responda em JSON: {"tasks":[{"id":"step-1","status":"prepared","files":["arquivo
       : "";
     const rememberedPageBlock = usingRememberedPage
       ? `\n\nO pedido atual não nomeou uma página. A última edição concluída foi em ${JSON.stringify(lastEditedPage)}; limite-se a essa página. Se o elemento ou texto pedido não existir nela, informe que não o encontrou em vez de inventar outra alteração.` : "";
-    const editUser = () => `Pedido: "${prompt}"${rememberedPageBlock}${attachedTextContext}${engine.customContext}${historyBlock}${preferencesBlock}${imageAssetContext}\n\nArquivos atuais:\n\n${filesBlock()}${referenceBlock()}\n\nTarefas (prepared significa código preparado, nunca executado/publicado): ${JSON.stringify(taskPlan)}\n\nCaminhos disponíveis para request_files (arquivos atuais omitidos):\n${candidatePaths.filter(p=>!Object.hasOwn(fileContents,p)).join("\n")}\n\nRodadas adicionais restantes: ${Math.max(0,MAX_ADDITIONAL_READ_ROUNDS-extraReads)}.`;
+    const editUser = () => `Imagens conhecidas no projeto e anexos preparados: ${JSON.stringify(assetInventory)}. Não invente fotos ou caminhos. Se faltarem imagens obrigatórias, declare exatamente o que precisa ser anexado; não substitua fotos por silhuetas como entrega concluída.\n\nPedido: "${prompt}"${rememberedPageBlock}${attachedTextContext}${engine.customContext}${historyBlock}${preferencesBlock}${imageAssetContext}\n\nArquivos atuais:\n\n${filesBlock()}${referenceBlock()}\n\nTarefas (prepared significa código preparado, nunca executado/publicado): ${JSON.stringify(taskPlan)}\n\nCaminhos disponíveis para request_files (arquivos atuais omitidos):\n${candidatePaths.filter(p=>!Object.hasOwn(fileContents,p)).join("\n")}\n\nRodadas adicionais restantes: ${Math.max(0,MAX_ADDITIONAL_READ_ROUNDS-extraReads)}.`;
 
     function validarSintaxeReal(caminho: string, conteudo: string): string | null {
       if (/\.json$/.test(caminho)) {
@@ -1567,7 +1569,7 @@ Responda em JSON: {"tasks":[{"id":"step-1","status":"prepared","files":["arquivo
       if (!problemaEncontrado && engine.enabled && parsedEdit.continue_work !== true) {
         await report("reviewing");
         const assessment=await engine.review(editedFiles,Object.fromEntries(editedFiles.map(f=>[f.path,novosArquivosSet.has(f.path)?null:originalContents[f.path]??null])),
-          (system,user,deadline)=>askAI(model,system,user,true,undefined,false,2200,deadline), {references:{...referenceContents,...fileContents},tasks:parsedEdit.tasks,note:parsedEdit.note});
+          (system,user,deadline)=>askAI(model,system,user,true,undefined,false,2200,deadline), {references:{...referenceContents,...fileContents},tasks:parsedEdit.tasks,note:parsedEdit.note,assets:{paths:[...assetInventory.paths,...editedFiles.filter(f=>/\.(png|jpe?g|webp|gif|avif|svg)$/i.test(f.path)).map(f=>f.path)],complete:assetInventory.complete}});
         await report(assessment.status==='passed'?"review_passed":assessment.status==='blocked'?"review_blocked":"review_incomplete");
         if(assessment.status==='blocked') problemaEncontrado='Revisão independente: '+assessment.findings.filter((f:any)=>f.severity==='blocking').map((f:any)=>`${f.path}: ${f.message}`).join('; ');
         if(assessment.status==='blocked') {
@@ -1655,7 +1657,9 @@ Responda em JSON: {"tasks":[{"id":"step-1","status":"prepared","files":["arquivo
     }
 
     if (ultimoErroGeral) {
-      return json({ ok: false, engine:engine.snapshot(), error: ultimoErroGeral.msg, ...(ultimoErroGeral.code ? {code:ultimoErroGeral.code} : {}) }, ultimoErroGeral.status);
+      const missingAssets=engine.snapshot()?.review?.missing_assets || [];
+      const message=missingAssets.length ? "Não foi possível concluir: faltam imagens exigidas pelo pedido. Anexe as fotos ou adicione os arquivos ao projeto e envie novamente. Nenhum commit foi publicado nesta execução.\n\nArquivos ausentes:\n"+missingAssets.join("\n")+"\n\nDiagnóstico da revisão:\n"+ultimoErroGeral.msg : ultimoErroGeral.msg;
+      return json({ ok: false, engine:engine.snapshot(), error: message, missing_assets:missingAssets, ...(ultimoErroGeral.code ? {code:ultimoErroGeral.code} : {}) }, ultimoErroGeral.status);
     }
 
     if(engine.enabled) {
