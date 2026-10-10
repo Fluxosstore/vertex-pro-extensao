@@ -1,5 +1,5 @@
 import { createAuroraEngine } from "./aurora-engine.ts";
-import { handleAgentJob } from "./agent-jobs.ts";
+import { handleAgentJob, recordPublishedJob } from "./agent-jobs.ts";
 import { undoPublishedCommit } from "./undo-commit.ts";
 import { validationService } from "./plan-validation.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -456,11 +456,33 @@ function scoreFile(content: string, ctx: SelectedElementCtx): { score: number; r
   return { score, reasons };
 }
 
+// Image selection uses source/alt and known configuration references, never generic classes alone.
+function locateSelectedImage(files: Record<string,string>, ctx: SelectedElementCtx): LocatorResult | null {
+  const sources=[ctx.attributes?.src,ctx.attributes?.currentSrc].filter((v):v is string=>typeof v==='string' && !!v && !v.startsWith('data:') && !v.startsWith('blob:')).map(v=>{try{return new URL(v,'https://selection.invalid').pathname;}catch{return v;}});
+  const alt=ctx.attributes?.alt?.trim();
+  const symbols=new Set<string>();
+  for(const content of Object.values(files))for(const match of content.matchAll(/([A-Za-z_$][\w$]*)\s*:\s*["']([^"']+)["']/g)) {
+    if(sources.includes(match[2]))symbols.add(match[1]);
+  }
+  const matches:LocatorResult[]=[];
+  for(const [path,content] of Object.entries(files)) {
+    if(!/\.(tsx|jsx)$/.test(path))continue;
+    const images=content.match(/<img\b[\s\S]*?\/?>/g)||[];
+    let hits=images.filter(tag=>sources.some(src=>tag.includes(src)) || (alt && (tag.includes('alt="'+alt+'"')||tag.includes("alt='"+alt+"'"))) || [...symbols].some(key=>tag.includes('.'+key)));
+    // A bounded literal list mapped to img is a source location even when src={src}.
+    if(!hits.length)for(const list of content.matchAll(/\[\s*\{[\s\S]{0,6000}?\]\s*\.map\([\s\S]{0,3000}?<img\b[^>]*>/g)) {
+      if(sources.some(src=>list[0].includes(src)) || [...symbols].some(key=>list[0].includes('.'+key)))hits.push(list[0]);
+    }
+    if(hits.length===1)matches.push({path,score:20,matchReasons:['imagem identificada por src/alt ou referência de configuração']});
+  }
+  return matches.length===1?matches[0]:null;
+}
 function locateElement(
   files: Record<string, string>,
   ctx: SelectedElementCtx,
   MIN_SCORE = 6
 ): LocatorResult | null {
+  if(ctx.tag?.toLowerCase()==="img")return locateSelectedImage(files,ctx);
   const results: LocatorResult[] = [];
   for (const [path, content] of Object.entries(files)) {
     const { score, reasons } = scoreFile(content, ctx);
@@ -909,8 +931,14 @@ Responda em JSON: {"intent": "conversa" ou "edicao", "resposta": "sua resposta e
       }
 
       if (plan.jobId && action !== "validation_cancel") {
-        const {data:job} = await supabase.from("vertex_agent_jobs").select("status").eq("id",plan.jobId).eq("license_id",licenseId).eq("device_id",deviceId).maybeSingle();
+        const {data:job} = await supabase.from("vertex_agent_jobs").select("status,result").eq("id",plan.jobId).eq("license_id",licenseId).eq("device_id",deviceId).maybeSingle();
+        if(action==="confirm_plan" && job?.result?.publication?.commit_sha)return json({...job.result,already_published:true});
         if (job?.status !== "ready") return json({ok:false,error:"Este comando foi cancelado, expirou ou não está pronto. Gere outro plano."},409);
+      }
+      async function finishPublication(commitSha:string) {
+        const receipt={ok:true,mode:'committed',commit_sha:commitSha,commit_url:`https://github.com/${repo}/commit/${commitSha}`,files_changed:[...files.map((f:any)=>f.path),...assets.map(a=>a.path)],undo_token:await undoReceipt(commitSha,plan.baseCommitSha)};
+        if(plan.jobId)try{await recordPublishedJob(supabase,plan,receipt);}catch(e){console.error('[publication-audit]',plan.jobId,'Falha ao registrar commit');return json({...receipt,publication_recorded:false,note:'Commit publicado, mas o registro do histórico falhou. Guarde o link do commit.'});}
+        return json({...receipt,publication_recorded:!!plan.jobId});
       }
       const validator = validationService(token, repo, branch, {githubFetch,signPlan,filesHash,decode:decodeBase64Utf8});
       if (action.startsWith("validation_")) {
@@ -929,8 +957,7 @@ Responda em JSON: {"intent": "conversa" ou "edicao", "resposta": "sua resposta e
         if (body.reviewAcknowledged !== true) return json({ok:false,error:"Revise a validação e aprove manualmente."},409);
         try {
           const commitSha = await validator.publish(plan);
-          return json({ok:true,undo_token:await undoReceipt(commitSha,plan.baseCommitSha),commit_sha:commitSha,commit_url:`https://github.com/${repo}/commit/${commitSha}`,
-            files_changed:[...files.map((f:any)=>f.path),...assets.map(a=>a.path)]});
+          return await finishPublication(commitSha);
         } catch (e) { return json({ok:false,error:e instanceof Error ? e.message : String(e)},409); }
       }
 
@@ -975,11 +1002,7 @@ Responda em JSON: {"intent": "conversa" ou "edicao", "resposta": "sua resposta e
         method: "PATCH", body: JSON.stringify({ sha: commitSha }),
       });
       if (!updated.ok) return json({ ok: false, error: "Commit criado, mas a branch não foi atualizada." }, 502);
-      return json({
-        ok: true, undo_token:await undoReceipt(commitSha,plan.baseCommitSha), commit_sha: commitSha,
-        commit_url: `https://github.com/${repo}/commit/${commitSha}`,
-        files_changed: [...files.map((f: any) => f.path), ...assets.map((a) => a.path)],
-      });
+      return await finishPublication(commitSha);
     }
 
     if(engine.enabled) await report("coordinating");
@@ -1047,21 +1070,26 @@ Responda em JSON: {"intent": "conversa" ou "edicao", "resposta": "sua resposta e
     if (selectedElement && tentativaArquivo === 1) {
       const componentCandidates = candidatePaths.filter(p =>
         /\.(tsx|jsx|ts|js)$/.test(p) && !p.includes(".test.") && !p.includes(".spec.")
-      ).slice(0, 30);
+      ).sort((a,b)=>Number(!/components|routes|pages|config/.test(a))-Number(!/components|routes|pages|config/.test(b))).slice(0, 64);
 
       const preloadedContents: Record<string, string> = {};
-      for (const path of componentCandidates) {
-        const cResp = await githubFetch(token, `https://api.github.com/repos/${repo}/contents/${encodeURIComponent(path).replace(/%2F/g, "/")}?ref=${baseCommitSha}`);
-        if (!cResp.ok) continue;
-        const cData = await cResp.json();
-        if (cData.size && cData.size > MAX_FILE_BYTES_TO_SEND) continue;
-        try { preloadedContents[path] = decodeBase64Utf8((cData.content || "").replace(/\n/g, "")); } catch { /* skip */ }
+      for(let start=0;start<componentCandidates.length;start+=6) {
+        if(Date.now()+30000>=requestDeadline)break;
+        await Promise.all(componentCandidates.slice(start,start+6).map(async path=>{
+          try {
+            const cResp=await githubFetch(token, `https://api.github.com/repos/${repo}/contents/${encodeURIComponent(path).replace(/%2F/g,"/")}?ref=${baseCommitSha}`,{signal:AbortSignal.timeout(8000)});
+            if(!cResp.ok)return;const cData=await cResp.json();
+            if(cData.size>MAX_FILE_BYTES_TO_SEND || cData.encoding!=="base64")return;
+            preloadedContents[path]=decodeBase64Utf8((cData.content||"").replace(/\n/g,""));
+          }catch{/* Missing context must never select a different image by guess. */}
+        }));
       }
 
       locatorResult = locateElement(preloadedContents, selectedElement as SelectedElementCtx);
 
       if (!locatorResult) {
         locatorAmbiguous = true;
+        if((selectedElement as any).tag?.toLowerCase()==='img')return json({ok:false,code:'IMAGE_TARGET_UNRESOLVED',error:'Não consegui identificar com segurança a imagem selecionada no código. Nenhuma alteração foi publicada. Informe a página e qual imagem deseja trocar (por exemplo: foto da mulher na introdução) e selecione-a novamente. Não vou colocar a imagem em outro local por suposição.'},422);
       } else {
         chosenPaths = [locatorResult.path];
       }
@@ -1090,7 +1118,7 @@ Responda em JSON: {"intent": "conversa" ou "edicao", "resposta": "sua resposta e
       const descarteHint = arquivosDescartados.length
         ? `\n\nATENÇÃO: você já tentou ${arquivosDescartados.map((p) => `"${p}"`).join(", ")} antes e ${motivoDescarte || "não continha o que o pedido precisava"}. NÃO escolha esse(s) arquivo(s) de novo — procure em outro lugar do mapa onde esse texto/elemento realmente pode estar (ex: uma página específica, um componente de tela de boas-vindas/login, um arquivo de configuração de textos).`
         : "";
-      const chooseSystem = engine.guidance + `Você é um assistente de engenharia de software. Dado um pedido do usuário e o mapa de arquivos de um repositório (caminho, o que cada um exporta, e quais outros arquivos ele usa), escolha os arquivos relevantes pro pedido (no máximo ${MAX_FILES_AI_CAN_REQUEST}). Use o mapa pra entender como os arquivos se conectam — ex: se um componente usado numa página faz mais sentido pro pedido do que a própria página, prefira o componente. Leia o pedido inteiro, incluindo suas restrições. Caminhos citados são pistas: priorize-os quando forem o alvo, mas respeite "não altere". Para bugs, escolha os componentes que executam a ação e seus handlers, não apenas tipos ou documentação. Um nome como login citado em uma restrição não define a página alvo. Divida TODOS os requisitos do pedido em até 8 tarefas concretas; liste também itens que dependem de banco, testes ou configuração. Responda SOMENTE nesse formato JSON: {"files": ["caminho/um.tsx", "caminho/dois.css"], "tasks": ["Criar componente", "Integrar navegação"]}. NÃO responda com um objeto onde as chaves são os caminhos — é sempre uma lista dentro da chave "files".
+      const chooseSystem = engine.guidance + `Você é um assistente de engenharia de software. Dado um pedido do usuário e o mapa de arquivos de um repositório (caminho, o que cada um exporta, e quais outros arquivos ele usa), escolha os arquivos relevantes pro pedido (no máximo ${MAX_FILES_AI_CAN_REQUEST}). Use o mapa pra entender como os arquivos se conectam — ex: se um componente usado numa página faz mais sentido pro pedido do que a própria página, prefira o componente. Leia o pedido inteiro, incluindo suas restrições. Caminhos citados são pistas: priorize-os quando forem o alvo, mas respeite "não altere". Para bugs, escolha os componentes que executam a ação e seus handlers, não apenas tipos ou documentação. Um nome como login citado em uma restrição não define a página alvo. Divida TODOS os requisitos do pedido em até 8 tarefas concretas; liste dependências externas em tarefas somente quando fizerem parte do pedido. Não acrescente executar build/testes ou inspeção visual como tarefas obrigatórias a uma simples troca de imagem; informe validações não executadas em note. Responda SOMENTE nesse formato JSON: {"files": ["caminho/um.tsx", "caminho/dois.css"], "tasks": ["Criar componente", "Integrar navegação"]}. NÃO responda com um objeto onde as chaves são os caminhos — é sempre uma lista dentro da chave "files".
 
 REGRA IMPORTANTE sobre projetos React/Tailwind (o padrão da Lovable/Vite): a cor, tamanho e espaçamento de um texto quase sempre vêm de classes utilitárias direto no componente (ex: className="text-blue-600"), NÃO de um arquivo .css global. Se o pedido menciona mudar a cor/estilo de um texto ou elemento específico visível na tela, priorize encontrar e escolher o(s) arquivo(s) de COMPONENTE (.tsx/.jsx) que contém esse texto — só escolha um arquivo .css/.scss global se tiver certeza de que a regra está definida lá (ex: veio no nome do arquivo, ou é uma variável de tema/cor global).
 
@@ -1233,7 +1261,7 @@ CRIAÇÃO DE ARQUIVOS NOVOS: se o pedido for pra CRIAR algo que ainda não exist
       .map((p: any) => `${p.tag || '?'}${p.id ? '#' + p.id : ''}${p.classes ? '.' + String(p.classes).split(/\s+/).slice(0, 2).join('.') : ''}`)
       .join(' > ');
     const elementEditHint = selectedElement && locatorResult
-      ? `\n\nATENÇÃO — EDIÇÃO CIRURGICA: O usuário selecionou visualmente:\n- Tag: ${(selectedElement as any).tag || '??'}\n- Texto visível: ${JSON.stringify(((selectedElement as any).text || '').slice(0, 80))}\n- Classes: ${JSON.stringify(((selectedElement as any).classes || '').slice(0, 80))}\n- ID: ${JSON.stringify((selectedElement as any).id || '')}\n- Contexto ao redor (texto próximo): ${JSON.stringify(((selectedElement as any).nearbyText || '').slice(0, 100))}\n- Está dentro de: ${paisResumo || '(sem info de ancestrais)'}\n- Localizado em: ${locatorResult.path} (sinais: ${locatorResult.matchReasons.slice(0,4).join(', ')})\n\nREGRAS IMPORTANTES:\n1. Altere APENAS o elemento identificado, nada mais. Se o mesmo tipo de elemento aparecer repetido no arquivo (ex: vários botões/cards parecidos), use o texto próximo e os ancestrais acima pra achar a ocorrência CERTA — não altere as outras.\n2. Se o texto estiver em variável/array/objeto separado, altere só essa entrada.\n3. Procure o texto visivel do elemento no arquivo e altere apenas ele.\n4. Retorne somente a troca exata do trecho identificado, preservando todo o restante do arquivo.\n5. NUNCA retorne files vazio — sempre faça a melhor tentativa e explique em note.`
+      ? `\n\nATENÇÃO — EDIÇÃO CIRURGICA: O usuário selecionou visualmente:\n- Tag: ${(selectedElement as any).tag || '??'}\n- Texto visível: ${JSON.stringify(((selectedElement as any).text || '').slice(0, 80))}\n- Classes: ${JSON.stringify(((selectedElement as any).classes || '').slice(0, 80))}\n- ID: ${JSON.stringify((selectedElement as any).id || '')}\n- Contexto ao redor (texto próximo): ${JSON.stringify(((selectedElement as any).nearbyText || '').slice(0, 100))}\n- Está dentro de: ${paisResumo || '(sem info de ancestrais)'}\n- Localizado em: ${locatorResult.path} (sinais: ${locatorResult.matchReasons.slice(0,4).join(', ')})\n\nREGRAS IMPORTANTES:\n1. Altere APENAS o elemento identificado, nada mais. Se o mesmo tipo de elemento aparecer repetido no arquivo (ex: vários botões/cards parecidos), use o texto próximo e os ancestrais acima pra achar a ocorrência CERTA — não altere as outras.\n2. Se o texto estiver em variável/array/objeto separado, altere só essa entrada.\n3. Procure o texto visivel do elemento no arquivo e altere apenas ele.\n4. Retorne somente a troca exata do trecho identificado, preservando todo o restante do arquivo.\n5. Se não puder comprovar qual ocorrência corresponde à seleção, retorne files vazio e explique a dúvida. Nunca escolha outro local por suposição.`
       : selectedElement && locatorAmbiguous
       ? `\n\nNOTA: O usuário selecionou visualmente um elemento (tag: ${(selectedElement as any).tag}, texto: "${((selectedElement as any).text || "").slice(0,60)}", contexto ao redor: "${((selectedElement as any).nearbyText || "").slice(0,80)}", dentro de: ${paisResumo || '(sem info)'}), mas o localizador não achou um arquivo com confiança suficiente. Use o contexto como dica, mas tome cuidado pra não alterar o elemento errado.`
       : "";
@@ -1272,7 +1300,7 @@ Responda em JSON: {"tasks":[{"id":"step-1","status":"prepared","files":["arquivo
       : "";
     const rememberedPageBlock = usingRememberedPage
       ? `\n\nO pedido atual não nomeou uma página. A última edição concluída foi em ${JSON.stringify(lastEditedPage)}; limite-se a essa página. Se o elemento ou texto pedido não existir nela, informe que não o encontrou em vez de inventar outra alteração.` : "";
-    const editUser = () => `Imagens conhecidas no projeto e anexos preparados: ${JSON.stringify(assetInventory)}. Não invente fotos ou caminhos. Se faltarem imagens obrigatórias, declare exatamente o que precisa ser anexado; não substitua fotos por silhuetas como entrega concluída.\n\nPedido: "${prompt}"${rememberedPageBlock}${attachedTextContext}${engine.customContext}${historyBlock}${preferencesBlock}${imageAssetContext}\n\nArquivos atuais:\n\n${filesBlock()}${referenceBlock()}\n\nTarefas (prepared significa código preparado, nunca executado/publicado): ${JSON.stringify(taskPlan)}\n\nCaminhos disponíveis para request_files (arquivos atuais omitidos):\n${candidatePaths.filter(p=>!Object.hasOwn(fileContents,p)).join("\n")}\n\nRodadas adicionais restantes: ${Math.max(0,MAX_ADDITIONAL_READ_ROUNDS-extraReads)}.`;
+    const editUser = () => `Alvo selecionado: ${JSON.stringify(selectedElement ? {tag:selectedElement.tag,attributes:selectedElement.attributes,nearbyText:selectedElement.nearbyText,file:locatorResult?.path} : null)}. Respeite o elemento, não adicione a imagem em outra tela.\n\nImagens conhecidas no projeto e anexos preparados: ${JSON.stringify(assetInventory)}. Não invente fotos ou caminhos. Se faltarem imagens obrigatórias, declare exatamente o que precisa ser anexado; não substitua fotos por silhuetas como entrega concluída.\n\nPedido: "${prompt}"${rememberedPageBlock}${attachedTextContext}${engine.customContext}${historyBlock}${preferencesBlock}${imageAssetContext}\n\nArquivos atuais:\n\n${filesBlock()}${referenceBlock()}\n\nTarefas (prepared significa código preparado, nunca executado/publicado): ${JSON.stringify(taskPlan)}\n\nCaminhos disponíveis para request_files (arquivos atuais omitidos):\n${candidatePaths.filter(p=>!Object.hasOwn(fileContents,p)).join("\n")}\n\nRodadas adicionais restantes: ${Math.max(0,MAX_ADDITIONAL_READ_ROUNDS-extraReads)}.`;
 
     function validarSintaxeReal(caminho: string, conteudo: string): string | null {
       if (/\.json$/.test(caminho)) {
@@ -1569,7 +1597,7 @@ Responda em JSON: {"tasks":[{"id":"step-1","status":"prepared","files":["arquivo
       if (!problemaEncontrado && engine.enabled && parsedEdit.continue_work !== true) {
         await report("reviewing");
         const assessment=await engine.review(editedFiles,Object.fromEntries(editedFiles.map(f=>[f.path,novosArquivosSet.has(f.path)?null:originalContents[f.path]??null])),
-          (system,user,deadline)=>askAI(model,system,user,true,undefined,false,2200,deadline), {references:{...referenceContents,...fileContents},tasks:parsedEdit.tasks,note:parsedEdit.note,assets:{paths:[...assetInventory.paths,...editedFiles.filter(f=>/\.(png|jpe?g|webp|gif|avif|svg)$/i.test(f.path)).map(f=>f.path)],complete:assetInventory.complete}});
+          (system,user,deadline)=>askAI(model,system,user,true,undefined,false,2200,deadline), {selectedElement:selectedElement?{tag:selectedElement.tag,attributes:selectedElement.attributes,file:locatorResult?.path}:null,references:{...referenceContents,...fileContents},tasks:parsedEdit.tasks,note:parsedEdit.note,assets:{paths:[...assetInventory.paths,...editedFiles.filter(f=>/\.(png|jpe?g|webp|gif|avif|svg)$/i.test(f.path)).map(f=>f.path)],complete:assetInventory.complete}});
         await report(assessment.status==='passed'?"review_passed":assessment.status==='blocked'?"review_blocked":"review_incomplete");
         if(assessment.status==='blocked') problemaEncontrado='Revisão independente: '+assessment.findings.filter((f:any)=>f.severity==='blocking').map((f:any)=>`${f.path}: ${f.message}`).join('; ');
         if(assessment.status==='blocked') {

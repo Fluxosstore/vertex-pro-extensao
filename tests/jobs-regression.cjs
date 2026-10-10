@@ -34,6 +34,11 @@ const flush=()=>new Promise(resolve=>setImmediate(resolve));
  connection.selected_repo_full_name='owner/another';release();await Promise.all(background); // No polling/browser needed to finish.
  r=await call('job_status');assert.equal(r.job.status,'ready');assert.equal(r.result.plan_token,'renewed');assert.equal(r.job.usage_day,'2026-10-05');assert.equal(refresh,1);assert.equal(charges,1);
  r=await call('job_diagnostic');assert(!r.result);assert(!JSON.stringify(r).includes('ghp_private'));assert(!JSON.stringify(jobs.get(id)).includes('ghp_private'));assert(!('prompt' in jobs.get(id)));
+ await ctx.recordPublishedJob(db,{jobId:id,licenseId:'license-a',deviceId:'device',repo:'owner/repo'},{ok:true,mode:'committed',commit_sha:'a'.repeat(40),commit_url:'https://github.com/owner/repo/commit/'+ 'a'.repeat(40)});
+ r=await call('job_status');assert.equal(r.job.stage,'published');assert.equal(r.job.commit_sha,'a'.repeat(40));assert.equal(r.result.mode,'committed');
+ r=await call('job_cancel');assert.equal(r.code,'ALREADY_PUBLISHED');assert.equal(jobs.get(id).stage,'published');
+ await assert.rejects(()=>ctx.recordPublishedJob(db,{jobId:id,licenseId:'wrong',deviceId:'device',repo:'owner/repo'},{}));
+ jobs.get(id).result={mode:'plan'};
  r=await call('job_cancel');assert.equal(r.job.status,'cancelled');assert.equal(jobs.get(id).result,null);
  connection.selected_repo_full_name='owner/repo';jobs.clear();background=[];
  await call('job_start');await flush();await call('job_cancel');release();await Promise.all(background);assert.equal(jobs.get(id).status,'cancelled');assert.equal(jobs.get(id).result,null);

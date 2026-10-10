@@ -388,7 +388,7 @@
           <div class="next-popover" id="nextModelsPopover" style="display:none;">
             <div class="next-popover-label">Integrações</div>
             <button class="next-popover-item" title="GitHub" data-model="github">
-              <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.4.68-.22.68-.48 0-.24-.01-1.04-.01-1.89-2.78.61-3.37-1.21-3.37-1.21-.46-1.18-1.11-1.5-1.11-1.5-.91-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.55 2.34 1.1 2.91.84.09-.66.35-1.1.63-1.36-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05a9.29 9.29 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.8-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.48A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
+              <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.5.68-.22.68-.48 0-.24-.01-1.04-.01-1.89-2.78.61-3.37-1.21-3.37-1.21-.46-1.18-1.11-1.5-1.11-1.5-.91-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.55 2.34 1.1 2.91.84.09-.66.35-1.1.63-1.36-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05a9.29 9.29 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.8-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.48A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
               <span>GitHub</span>
             </button>
             <div class="next-popover-label" style="margin-top:2px;">GitHub abre em</div>
@@ -447,7 +447,7 @@
       <!-- Estado 1: sem conta GitHub conectada -->
       <div class="vtx-gh-state" id="vtxGhStateDisconnected" style="display:none;">
         <div class="vtx-gh-head">
-          <svg class="vtx-gh-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.4.68-.22.68-.48 0-.24-.01-1.04-.01-1.89-2.78.61-3.37-1.21-3.37-1.21-.46-1.18-1.11-1.5-1.11-1.5-.91-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.55 2.34 1.1 2.91.84.09-.66.35-1.1.63-1.36-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05a9.29 9.29 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.8-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.48A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
+          <svg class="vtx-gh-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.5.68-.22.68-.48 0-.24-.01-1.04-.01-1.89-2.78.61-3.37-1.21-3.37-1.21-.46-1.18-1.11-1.5-1.11-1.5-.91-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.55 2.34 1.1 2.91.84.09-.66.35-1.1.63-1.36-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05a9.29 9.29 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.8-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.48A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
           <span class="vtx-gh-head-text">Conecte o GitHub para editar via IA</span>
           <button class="vtx-gh-x" data-gh-close title="Fechar">×</button>
         </div>
@@ -472,7 +472,7 @@
       <!-- Estado 3: pronto para enviar comandos -->
       <div class="vtx-gh-state" id="vtxGhStateReady" style="display:none;">
         <div class="vtx-gh-head">
-          <svg class="vtx-gh-icon small" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.4.68-.22.68-.48 0-.24-.01-1.04-.01-1.89-2.78.61-3.37-1.21-3.37-1.21-.46-1.18-1.11-1.5-1.11-1.5-.91-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.55 2.34 1.1 2.91.84.09-.66.35-1.1.63-1.36-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05a9.29 9.29 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.8-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.48A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
+          <svg class="vtx-gh-icon small" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.5.68-.22.68-.48 0-.24-.01-1.04-.01-1.89-2.78.61-3.37-1.21-3.37-1.21-.46-1.18-1.11-1.5-1.11-1.5-.91-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.55 2.34 1.1 2.91.84.09-.66.35-1.1.63-1.36-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05a9.29 9.29 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.8-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.48A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
           <span class="vtx-gh-repo-name" id="vtxGhRepoName"></span>
           <button class="vtx-gh-switch" id="vtxGhChangeRepoBtn">Trocar</button>
           <button class="vtx-gh-x" data-gh-close title="Fechar">×</button>
@@ -666,6 +666,7 @@
 
   // Validation belongs to the signed proposal, and publishing rechecks GitHub.
   function planControls(plano) {
+    if(!plano.requiresValidation)return (plano.error?`<div class="next-ci-error">${escapeHtml(plano.error)}</div>`:'')+`<div role="status">Alterações preparadas, ainda não publicadas.</div><button type="button" class="next-plan-btn next-plan-apply" ${plano.busy?'disabled':''}>Aprovar commit</button><button type="button" class="next-plan-btn next-plan-cancel" ${plano.busy?'disabled':''}>Cancelar</button>`;
     const v = plano.validation;
     const labels = {queued:'Na fila do GitHub',in_progress:'Executando build e testes',waiting:'Aguardando GitHub',requested:'Aguardando execução',pending:'Aguardando execução',
       passed: v?.tests === 'not_configured' ? 'Build aprovado. Projeto sem testes configurados.' : 'Build e testes aprovados.',
@@ -1713,7 +1714,7 @@
     }
     historyList.innerHTML = commandHistory.map(h => {
       const icon = h.mode === 'github'
-        ? '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.4.68-.22.68-.48 0-.24-.01-1.04-.01-1.89-2.78.61-3.37-1.21-3.37-1.21-.46-1.18-1.11-1.5-1.11-1.5-.91-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.55 2.34 1.1 2.91.84.09-.66.35-1.1.63-1.36-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05a9.29 9.29 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.8-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.48A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>'
+        ? '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.5.68-.22.68-.48 0-.24-.01-1.04-.01-1.89-2.78.61-3.37-1.21-3.37-1.21-.46-1.18-1.11-1.5-1.11-1.5-.91-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.55 2.34 1.1 2.91.84.09-.66.35-1.1.63-1.36-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05a9.29 9.29 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.8-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.48A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>'
         : h.mode === 'lovable'
         ? '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 21s-6.7-4.35-9.3-8.1C.9 10.1 1.4 6.6 4.2 5c2.2-1.25 4.9-.6 6.3 1.3.4.5.7 1.1.9 1.7.2-.6.5-1.2.9-1.7 1.4-1.9 4.1-2.55 6.3-1.3 2.8 1.6 3.3 5.1 1.5 7.9C18.7 16.65 12 21 12 21z"/></svg>'
         : '<svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/></svg>';
@@ -2813,6 +2814,7 @@
     const ticket=jobTickets.get(id) || (await chrome.storage.local.get('vertex_agent_job_'+id))['vertex_agent_job_'+id];
     if(!ticket)return;
     if(cancel)await jobRequest(ticket,'job_cancel');
+    else try{const state=await jobRequest(ticket,'job_diagnostic');showJobTicket(ticket,state.job);}catch{/* Commit receipt remains visible even if diagnostic refresh fails. */}
     ticket.settled=true;ticket.delivered=true;await saveJobTicket(ticket);
   }
   async function cancelServerJob(ticket) {
@@ -2829,7 +2831,7 @@
       else {const holder=document.createElement('div');holder.innerHTML=html;ghResult.before(holder);}
       card=root.querySelector(`[data-agent-job="${ticket.id}"]`);
     }
-    const label=job.status==='failed' ? `Falhou: ${job.error_message || job.error_code || 'consulte o diagnóstico'}` : jobStages[job.stage] || 'Consultando comando';
+    const label=job.commit_sha ? `Publicado no GitHub: ${job.commit_sha.slice(0,7)}` : job.status==='failed' ? `Falhou: ${job.error_message || job.error_code || 'consulte o diagnóstico'}` : jobStages[job.stage] || 'Consultando comando';
     if (card) {card.querySelector('.next-job-state').textContent=label;const trace=card.querySelector('.next-job-trace');if(trace)trace.innerHTML=globalThis.VertexAuroraEngine.trace(job.events);}
     clearTimeout(dockStepTimer);dockStepTimer=null;
     const thinking=dockChatMessages?.querySelector('#nextDockThinking');
@@ -2900,7 +2902,7 @@
     }
     try {
       const {job}=await jobRequest(ticket,'job_diagnostic');
-      const report=['Vertex Pro 3.5.4',`Comando: ${job.id}`,`Projeto: ${job.repo}`,`Estado: ${job.status}`,`Etapa: ${job.stage}`,`Início: ${job.created_at}`,`Atualização: ${job.updated_at}`,`Código: ${job.error_code || '-'}`,`Erro: ${job.error_message || '-'}`,
+      const report=['Vertex Pro 3.5.5',`Comando: ${job.id}`,`Projeto: ${job.repo}`,`Estado: ${job.status}`,`Etapa: ${job.stage}`,`Commit: ${job.commit_sha || 'não registrado'}`,`Link: ${job.commit_url || '-'}`,`Início: ${job.created_at}`,`Atualização: ${job.updated_at}`,`Código: ${job.error_code || '-'}`,`Erro: ${job.error_message || '-'}`,
         ...(job.events || []).map(x=>`${x.at}: ${x.stage}`)].join('\n');
       try {await navigator.clipboard.writeText(report);} catch(_) {
         const input=document.createElement('textarea');input.value=report;input.style.cssText='position:fixed;left:-9999px;top:0';document.body.appendChild(input);input.select();

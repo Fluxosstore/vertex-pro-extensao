@@ -11,11 +11,11 @@ async function scenario(mode = 'complete', requireValidation = false, execution 
   const limited=['budget-finish','budget-stop','budget-partial','duplicate-reads','reselect-cache'].includes(mode);
   if(limited){for(const name of ['aa','ab','ac','ad'])files['src/'+name+'.js']='const placeholder=0;';for(let i=0;i<4;i++)files['src/extra/x'+i+'.js']='const extra'+i+'=0;';}
   const calls = [];
-  let handler, editRound = 0, quota = 0, jobStatus='ready',selectorCount=0,reviewRound=0;
+  let handler, editRound = 0, quota = 0, jobStatus='ready',jobPublication=null,selectorCount=0,reviewRound=0;
   const client = {
     from(table) {
       const q = { select(){return q}, eq(){return q}, async maybeSingle(){
-        return {data: table === 'vertex_agent_jobs' ? {status:jobStatus} : table === 'licenses' ? {id:'test',status:'active'} : table === 'github_connections' ?
+        return {data: table === 'vertex_agent_jobs' ? {status:jobStatus,result:jobPublication} : table === 'licenses' ? {id:'test',status:'active'} : table === 'github_connections' ?
           {access_token:'test-only',selected_repo_full_name:'test/repo',selected_repo_default_branch:'main'} :
           {map_json:Object.fromEntries(Object.keys(files).map(p=>[p,{exports:[],imports:[]}]))}};
       }};
@@ -86,14 +86,17 @@ async function scenario(mode = 'complete', requireValidation = false, execution 
   vm.runInNewContext(source,ctx);
   const invoke=async body=>{const r=await handler(new Request('https://test.invalid',{method:'POST',body:JSON.stringify({licenseKey:'test',deviceId:'test',...body})}));return {status:r.status,data:await r.json()}};
   const initial={prompt:'Corrija a opção e crie um painel com o novo título.',deferCommit:!execution,requireValidation,auroraEngine:mode.startsWith('engine-')};
+  if(mode==='image-unknown')initial.selectedElement={tag:'img',classes:'w-full object-cover'};
   const response=execution ? await (async()=>{const r=await ctx.handleCommand(new Request('https://test.invalid',{method:'POST'}),execution,{licenseKey:'test',deviceId:'test',...initial});return{status:r.status,data:await r.json()}})() : await invoke(initial);
-  return {...response,reviewRound,setJobStatus:s=>jobStatus=s,calls,selectorCount,editRound,get quota(){return quota},invoke};
+  return {...response,reviewRound,setPublication:p=>jobPublication=p,setJobStatus:s=>jobStatus=s,calls,selectorCount,editRound,get quota(){return quota},invoke};
 }
 (async()=>{
   let r=await scenario();assert.equal(r.status,200,JSON.stringify(r.data));assert.equal(r.data.files.length,3);assert(r.data.tasks.every(t=>t.status==='prepared'));assert.equal(r.data.agent.stages,2);assert.equal(r.data.agent.extra_reads,0);assert.equal(r.quota,1);assert(r.data.files_created.includes('src/new.js'));assert(!r.data.requires_manual_review);assert(!r.calls.some(c=>c.url.includes('github.com')&&c.opts.method==='POST'));
   r=await scenario('partial');assert.equal(r.status,200);assert(r.data.requires_manual_review);assert.equal(r.data.tasks[1].status,'pending');const rejected=await r.invoke({action:'confirm_plan',files:r.data.files,assets:r.data.assets,plan_token:r.data.plan_token});assert.equal(rejected.status,409);
   r=await scenario('complete',true);assert(r.data.requires_validation);let check=await r.invoke({action:'confirm_plan',reviewAcknowledged:true,files:r.data.files,assets:r.data.assets,plan_token:r.data.plan_token});assert.equal(check.status,409);check=await r.invoke({action:'validation_start',files:r.data.files,assets:r.data.assets,plan_token:r.data.plan_token});assert.equal(check.data.code,'VALIDATION_SETUP_REQUIRED');assert.equal(r.quota,1);check=await r.invoke({action:'validation_status',files:[{path:'src/a.js',content:'tampered'}],assets:r.data.assets,plan_token:r.data.plan_token});assert.equal(check.status,400);
   const stages=[];r=await scenario('complete',false,{jobId:'job-test',repo:'test/repo',branch:'main',token:'test-only',progress:async stage=>stages.push(stage)});assert.equal(r.data.mode,'plan');assert.equal(r.data.review_base['src/a.js'],'const title = \"old\";');assert.equal(r.data.review_base['src/new.js'],null);assert(stages.includes('quota_accepted'));assert(stages.includes('checking'));r.setJobStatus('cancelled');const cancelled=await r.invoke({action:'confirm_plan',files:r.data.files,assets:r.data.assets,plan_token:r.data.plan_token});assert.equal(cancelled.status,409);
+  r.setJobStatus('ready');r.setPublication({ok:true,mode:'committed',commit_sha:'a'.repeat(40),publication:{commit_sha:'a'.repeat(40)}});const repeated=await r.invoke({action:'confirm_plan',files:r.data.files,assets:r.data.assets,plan_token:r.data.plan_token});assert(repeated.data.already_published);assert.equal(repeated.data.commit_sha,'a'.repeat(40));
+  r=await scenario('image-unknown');assert.equal(r.data.code,'IMAGE_TARGET_UNRESOLVED');assert.equal(r.editRound,0);assert(!r.calls.some(c=>c.url.includes('github.com')&&c.opts.method==='POST'));
   r=await scenario('outside');assert.equal(r.status,422);assert(!r.calls.some(c=>c.url.includes('secret')));
   for(const mode of ['budget-finish','budget-partial','duplicate-reads','reselect-cache']) {
     r=await scenario(mode);assert.equal(r.status,200,mode+': '+JSON.stringify(r.data));assert.equal(r.quota,1);assert(r.data.requires_manual_review);assert(!r.calls.some(c=>c.url.includes('github.com')&&c.opts.method==='POST'));

@@ -1,3 +1,5 @@
+> Atualização 3.5.5: seleção precisa de imagens e registro de publicação por comando. Veja STATUS-3.5.5.md.
+
 > Atualização 3.5.4: revisão proporcional, inventário de imagens e diagnóstico completo. Veja STATUS-3.5.4.md.
 
 > Atualização 3.5.3: investigação após rejeição e revisão com contexto das integrações. Veja STATUS-3.5.3.md.

@@ -1,0 +1,10 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),{stripTypeScriptTypes}=require('node:module');
+const s=fs.readFileSync(__dirname+'/../supabase/functions/github-ai-edit/index.ts','utf8');const ctx={URL};vm.createContext(ctx);vm.runInContext(stripTypeScriptTypes(s.slice(s.indexOf('interface SelectedElementCtx'),s.indexOf('function splitDataUrl'))),ctx);
+const files={'src/config.ts':'export const ASSETS={heroWoman:"/assets/woman.png",heroMan:"/assets/man.png"};','src/Intro.tsx':'<img src={ASSETS.logo} />{[{src:ASSETS.heroWoman,alt:"Woman"},{src:ASSETS.heroMan,alt:"Man"}].map(({src,alt})=><img src={src} alt={alt} />)}','src/Final.tsx':'<img src={other} className="w-full object-cover" />'};
+const selected={tag:'img',classes:'w-full object-cover',attributes:{src:'https://preview.example/assets/woman.png',alt:'Woman'}};
+assert.equal(ctx.locateElement(files,selected).path,'src/Intro.tsx');
+assert.equal(ctx.locateElement({...files,'src/Other.tsx':'<img src={ASSETS.heroWoman} />'},selected),null);
+assert.equal(ctx.locateElement({'src/F.tsx':'<img src={other} className="w-full object-cover" />'},selected),null);
+assert.equal(ctx.locateElement({'src/F.tsx':'<img src="/a.jpg" /><img src="/a.jpg" />'},{tag:'img',attributes:{src:'/a.jpg'}}),null);
+assert.equal(ctx.locateElement({'src/F.tsx':'<img alt="Unique logo" src={photo} />'},{tag:'img',attributes:{alt:'Unique logo'}}).path,'src/F.tsx');
+console.log('PASS: image source through config and mapped list, unique alt, duplicate/unknown targets rejected.');

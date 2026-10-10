@@ -13,8 +13,9 @@ const ctx={TextEncoder,crypto:require('node:crypto').webcrypto,AbortSignal,Date,
 vm.createContext(ctx);vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../aurora-engine-ui.js'),'utf8'),ctx);vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../code-review.js'),'utf8'),ctx);vm.runInContext(selected,ctx);
 const blocked=p=>/next-plan-apply" disabled/.test(ctx.planControls(p));
 (async()=>{
+ assert(!ctx.planControls({}).includes('Validar build'));assert(ctx.planControls({}).includes('Aprovar commit'));
  assert(blocked({requiresValidation:true}));assert(blocked({requiresValidation:true,validation:{state:'failure',publishable:false}}));assert(!blocked({requiresValidation:true,validation:{state:'passed',publishable:true}}));
- assert(ctx.planControls({validation:{state:'passed',tests:'not_configured'}}).includes('sem testes configurados'));
+ assert(ctx.planControls({requiresValidation:true,validation:{state:'passed',tests:'not_configured'}}).includes('sem testes configurados'));
  assert(ctx.planControls({error:'<img src=x onerror=alert(1)>'}).includes('&lt;img'));
  assert(!ctx.planControls({validation:{url:'javascript:alert(1)'}}).includes('href='));
  const id='plano_123-ab';const p={repo,projectKey:project,files:[{path:'src/a.js',content:'x'}],token:'old',prompt:'change',expiresAt:Date.now()+60000};ctx.pendingPlans[id]=p;

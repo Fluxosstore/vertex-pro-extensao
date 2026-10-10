@@ -83,6 +83,7 @@ export async function handleAgentJob(body: any, deps: any) {
     return {ok:true,job:publicJob(job)};
   }
   if (!job || job.project_key !== String(body.projectKey || '')) return {ok:false,code:'JOB_NOT_FOUND',error:'Comando não encontrado para este projeto, licença e dispositivo.'};
+  if (body.action === 'job_cancel' && job.result?.publication?.commit_sha)return {ok:false,code:'ALREADY_PUBLISHED',error:'Este comando já foi publicado. Use Desfazer alteração para revertê-lo.'};
   if (body.action === 'job_cancel') {
     // Even a completed proposal can be discarded; no job ever publishes a commit.
     const cancelled=await update({status:'cancelled',stage:'cancelled',result:null,error_code:null,error_message:null}).in('status',['queued','running','ready']);
@@ -100,6 +101,18 @@ function sanitizeError(value: string) {
 function publicJob(job: any) {
   return {id:job.id,status:job.status,stage:job.stage,repo:job.repo,branch:job.branch,project_key:job.project_key,
     created_at:job.created_at,updated_at:job.updated_at,expires_at:job.expires_at,deadline_at:job.deadline_at,
+    commit_sha:job.result?.publication?.commit_sha || null,commit_url:job.result?.publication?.commit_url || null,published_at:job.result?.publication?.published_at || null,
     error_code:job.error_code,error_message:sanitizeError(job.error_message || ''),events:job.events,
     command_counted:job.quota_charged,daily_used:job.daily_used,usage_day:job.usage_day};
+}
+
+// Called only after authenticated publication succeeds; never trusts a browser-reported SHA.
+export async function recordPublishedJob(db:any, plan:any, receipt:any) {
+  if(!plan.jobId)return;
+  const scope=()=>db.from(TABLE).select('*').eq('id',plan.jobId).eq('license_id',plan.licenseId).eq('device_id',plan.deviceId).eq('repo',plan.repo).maybeSingle();
+  const read=await scope();if(read.error||!read.data)throw Error('Comando indisponível para auditoria');
+  const at=new Date().toISOString();const result={...read.data.result,...receipt,publication:{commit_sha:receipt.commit_sha,commit_url:receipt.commit_url,published_at:at}};
+  delete result.plan_token;
+  const saved=await db.from(TABLE).update({status:'ready',stage:'published',result,error_code:null,error_message:null,updated_at:at,events:[...(read.data.events||[]),{stage:'published',at}].slice(-24)}).eq('id',plan.jobId).eq('license_id',plan.licenseId).eq('device_id',plan.deviceId).eq('repo',plan.repo).select('id').maybeSingle();
+  if(saved.error||!saved.data)throw Error('Falha ao salvar publicação');
 }

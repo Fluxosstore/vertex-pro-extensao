@@ -156,6 +156,8 @@
         role: el.getAttribute('role')  || undefined,
         href: el.getAttribute('href')  || undefined,
         src:  el.getAttribute('src')   || undefined,
+        alt: el.getAttribute('alt') || undefined,
+        currentSrc: el.currentSrc || undefined,
       },
       parents:    collectAncestors(el, 4),
       nearbyText,
