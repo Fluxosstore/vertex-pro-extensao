@@ -960,7 +960,14 @@
   }
   // Botões sob a resposta: "Ver detalhes" (como a Aurora pensou) e "N arquivos".
   function addMessageExtras(bolha, tipo, opts) {
-    if (tipo === 'erro' || tipo === 'pensamento') return;
+    if (tipo === 'pensamento') return;
+    if (tipo === 'erro') {
+      if (!opts.jobId) return;
+      const row = actionsRow(bolha);
+      if (opts.recover) row.insertAdjacentHTML('beforeend', `<button type="button" class="vtx-chip next-job-resume" data-agent-job="${escapeHtml(opts.jobId)}">Consultar andamento</button>`);
+      row.insertAdjacentHTML('beforeend', `<button type="button" class="vtx-chip next-job-report" data-agent-job="${escapeHtml(opts.jobId)}">Copiar diagnóstico</button>`);
+      return;
+    }
     const row = actionsRow(bolha);
     const trace = !opts.noTrace && dockLastTrace && dockLastTrace.steps.length ? dockLastTrace : null;
     if (trace) {
@@ -2929,10 +2936,9 @@
       if (card) (card.closest('.next-dock-msg') || card.parentElement).remove();
       return;
     }
-    if (!card) {
+    if (!card && !isDocked()) {
       const html=`<div class="next-agent-job" data-agent-job="${ticket.id}"><small>Comando ${ticket.id}</small><div class="next-job-state"></div><div class="next-job-trace"></div><div class="next-job-actions"><button type="button" class="next-job-resume">Consultar andamento</button><button type="button" class="next-job-report">Copiar diagnóstico</button></div></div>`;
-      if (isDocked()) addDockChatMessage('ai',html,'plano');
-      else {const holder=document.createElement('div');holder.innerHTML=html;ghResult.before(holder);}
+      const holder=document.createElement('div');holder.innerHTML=html;ghResult.before(holder);
       card=root.querySelector(`[data-agent-job="${ticket.id}"]`);
     }
     const label=job.commit_sha ? `Publicado no GitHub: ${job.commit_sha.slice(0,7)}` : job.status==='failed' ? `Falhou: ${job.error_message || job.error_code || 'consulte o diagnóstico'}` : jobStages[job.stage] || 'Consultando comando';
@@ -3004,7 +3010,7 @@
     }
     try {
       const {job}=await jobRequest(ticket,'job_diagnostic');
-      const report=['Vertex Pro 3.5.5',`Comando: ${job.id}`,`Projeto: ${job.repo}`,`Estado: ${job.status}`,`Etapa: ${job.stage}`,`Commit: ${job.commit_sha || 'não registrado'}`,`Link: ${job.commit_url || '-'}`,`Início: ${job.created_at}`,`Atualização: ${job.updated_at}`,`Código: ${job.error_code || '-'}`,`Erro: ${job.error_message || '-'}`,
+      const report=['Vertex Pro 3.5.9',`Comando: ${job.id}`,`Projeto: ${job.repo}`,`Estado: ${job.status}`,`Etapa: ${job.stage}`,`Commit: ${job.commit_sha || 'não registrado'}`,`Link: ${job.commit_url || '-'}`,`Início: ${job.created_at}`,`Atualização: ${job.updated_at}`,`Código: ${job.error_code || '-'}`,`Erro: ${job.error_message || '-'}`,
         ...(job.events || []).map(x=>`${x.at}: ${x.stage}`)].join('\n');
       try {await navigator.clipboard.writeText(report);} catch(_) {
         const input=document.createElement('textarea');input.value=report;input.style.cssText='position:fixed;left:-9999px;top:0';document.body.appendChild(input);input.select();
@@ -3101,7 +3107,7 @@
 
       if (!data.ok) {
         ghShowMsg(data.error || 'Falha ao processar o pedido.', true);
-        if (isDocked()) addDockChatMessage('ai', escapeHtml(data.error || 'Falha ao processar o pedido.'), 'erro');
+        if (isDocked()) addDockChatMessage('ai', escapeHtml(data.error || 'Falha ao processar o pedido.'), 'erro', { jobId: op.jobTicket?.id });
         return false;
       }
 
@@ -3267,7 +3273,7 @@
         ? 'A consulta demorou demais. O processamento ocorre no servidor; use Consultar andamento para recuperar este comando.'
         : 'Erro: ' + (err?.message || err);
       ghShowMsg(message, true);
-      if (isDocked()) { await hideDockThinking(); addDockChatMessage('ai', escapeHtml(message), 'erro'); }
+      if (isDocked()) { await hideDockThinking(); addDockChatMessage('ai', escapeHtml(message), 'erro', { jobId: op.jobTicket?.id, recover: op.timedOut || /pausada/.test(String(err?.message || '')) }); }
       return false;
     } finally {
       clearTimeout(op.timeoutTimer);
