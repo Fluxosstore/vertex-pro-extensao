@@ -944,8 +944,10 @@ Responda em JSON: {"intent": "conversa" ou "edicao", "resposta": "sua resposta e
           assets.length > 4 || assets.some((a) => !a ||
             !/^public\/vertex-uploads\/[a-f0-9]{32}\.(?:png|jpg|webp|gif)$/.test(a.path) ||
             !/^[a-f0-9]{40}$/.test(a.sha)) ||
-          await filesHash(files) !== plan.filesHash ||
-          await filesHash(assets) !== (plan.assetsHash || await filesHash([]))) {
+          // Postgres jsonb (where job results are stored) reorders object keys, e.g. {path,sha} -> {sha,path}.
+          // Hash a normalized shape so the plan survives the round trip through the job record.
+          await filesHash(files.map((f: any) => ({ path: f.path, content: f.content }))) !== plan.filesHash ||
+          await filesHash(assets.map((a) => ({ path: a.path, sha: a.sha }))) !== (plan.assetsHash || await filesHash([]))) {
         return json({ ok: false, error: "Plano inválido, alterado ou expirado. Gere um novo plano." }, 400);
       }
 
