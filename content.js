@@ -664,28 +664,13 @@
     chrome.storage.local.set({ vertex_modo_plano: modoPlanoAtivo }).catch(() => {});
   });
 
-  // Validation belongs to the signed proposal, and publishing rechecks GitHub.
+  // New proposals publish without CI. Old signed proposals must be regenerated.
   function planControls(plano) {
-    if(!plano.requiresValidation)return (plano.error?`<div class="next-ci-error">${escapeHtml(plano.error)}</div>`:'')+`<div role="status">Alterações preparadas, ainda não publicadas.</div><button type="button" class="next-plan-btn next-plan-apply" ${plano.busy?'disabled':''}>Aprovar commit</button><button type="button" class="next-plan-btn next-plan-cancel" ${plano.busy?'disabled':''}>Cancelar</button>`;
-    const v = plano.validation;
-    const labels = {queued:'Na fila do GitHub',in_progress:'Executando build e testes',waiting:'Aguardando GitHub',requested:'Aguardando execução',pending:'Aguardando execução',
-      passed: v?.tests === 'not_configured' ? 'Build aprovado. Projeto sem testes configurados.' : 'Build e testes aprovados.',
-      failure:'A validação falhou. Confira os detalhes.',cancelled:'Validação cancelada.',timed_out:'A validação excedeu o tempo.',not_found:'Execução não localizada. Gere outro plano.',
-      dispatch_failed:'O GitHub recusou a execução.',unverified:'Não foi possível comprovar a validação.',ready:'Configuração pronta. Clique em Validar.',not_started:'Build e testes ainda não executados.'};
-    const status = labels[v?.state] || (v?.state ? 'Aguardando validação.' : 'Build e testes ainda não executados.');
-    const running = ['queued','in_progress','waiting','requested','pending'].includes(v?.state);
-    const details = (v?.steps || []).filter(x => x.conclusion && !['success','skipped'].includes(x.conclusion))
-      .map(x=>`${x.name}: ${x.conclusion}`).join('; ');
-    const runLink = v?.url && /^https:\/\/github\.com\/[^/]+\/[^/]+\/actions\/runs\/\d+$/.test(v.url)
-      ? `<a href="${escapeHtml(v.url)}" target="_blank" rel="noopener noreferrer">Ver execução no GitHub</a>` : '';
-    return `<div class="next-ci-result" role="status">${escapeHtml(status)}${details ? '<br>'+escapeHtml(details) : ''}${runLink ? '<br>'+runLink : ''}</div>` +
-      (plano.error ? `<div class="next-ci-error">${escapeHtml(plano.error)}</div>` : '') +
-      (plano.setupFile ? `<details class="next-ci-setup"><summary>Configuração manual</summary>Se a conta não puder instalar automaticamente, copie o conteúdo para <code>.github/workflows/vertex-validation.yml</code> na branch principal do GitHub. Depois gere outro plano.<button type="button" class="next-plan-btn next-plan-copy-config">Copiar configuração</button></details>` : '') +
-      (plano.needsSetup ? '<p class="next-ci-setup">Ativar adiciona um arquivo de configuração ao GitHub. As execuções usam a cota de Actions da conta. Requer permissão para workflows.</p><button type="button" class="next-plan-btn next-plan-setup">Ativar validação no GitHub</button>' : '') +
-      `<button type="button" class="next-plan-btn next-plan-validate" ${plano.busy || running || (v && !['ready','not_started'].includes(v.state)) ? 'disabled' : ''}>Validar build e testes</button>` +
-      (running || plano.checkpoint ? `<button type="button" class="next-plan-btn next-plan-check" ${plano.busy ? 'disabled' : ''}>Atualizar resultado</button>` : '') +
-      `<button type="button" class="next-plan-btn next-plan-apply" ${plano.busy || (plano.requiresValidation && !v?.publishable) ? 'disabled' : ''}>Aprovar commit</button>` +
-      `<button type="button" class="next-plan-btn next-plan-cancel" ${plano.busy ? 'disabled' : ''}>Cancelar</button>`;
+    const error = plano.error ? `<div class="next-ci-error">${escapeHtml(plano.error)}</div>` : '';
+    const legacy = plano.requiresValidation || plano.checkpoint;
+    return error + `<div role="status">${legacy ? 'Este plano pertence a uma versão anterior. Cancele-o e envie o pedido novamente.' : 'Alterações preparadas, ainda não publicadas.'}</div>` +
+      (legacy ? '' : `<button type="button" class="next-plan-btn next-plan-apply" ${plano.busy?'disabled':''}>Aprovar commit</button>`) +
+      `<button type="button" class="next-plan-btn next-plan-cancel" ${plano.busy?'disabled':''}>Cancelar</button>`;
   }
   function planContextCurrent(plano) {
     return plano.projectKey === getProjectContextKey() && plano.repo === ghActiveRepo && repoResolvedProjectKey === getProjectContextKey();
@@ -719,21 +704,6 @@
     plano.needsSetup = false;
     return result;
   }
-  function schedulePlanCheck(id, wrap) {
-    const p = pendingPlans[id];
-    if (!p || p.timer || !['queued','in_progress','waiting','requested','pending'].includes(p.validation?.state)) return;
-    p.timer = setTimeout(async()=>{
-      p.timer = null;
-      if (!pendingPlans[id] || !planContextCurrent(p) || !wrap.isConnected || p.busy) return;
-      p.busy = true;
-      try { await planRequest(p,'validation_status'); }
-      catch(e) {p.error = e.message;}
-      p.busy = false;
-      wrap.innerHTML = planControls(p);
-      await savePendingPlan(id).catch(()=>{});
-      if (!p.error) schedulePlanCheck(id,wrap);
-    },5000);
-  }
   let restoringPlans = false;
   async function restorePendingPlans() {
     if (restoringPlans || !isDocked() || !ghActiveRepo || repoResolvedProjectKey !== getProjectContextKey()) return;
@@ -750,8 +720,6 @@
         pendingPlans[id] = p;
         const paths = p.files.map(f=>escapeHtml(f.path)).join('<br>') + globalThis.VertexAuroraEngine.render(p.engine) + globalThis.VertexCodeReview.render(p.files,p.reviewBase,p.assets);
         addDockChatMessage('ai',`📋 <b>Plano recuperado</b><br>${escapeHtml(p.prompt)}<br>${paths}<div class="next-dock-plan-actions" data-plan-id="${id}">${planControls(p)}</div>`,'plano');
-        const wrap = dockChatMessages.querySelector(`[data-plan-id="${id}"]`);
-        if (wrap) schedulePlanCheck(id,wrap);
       }
     } finally {restoringPlans = false;}
   }
@@ -762,10 +730,7 @@
     const id = wrap?.dataset.planId;
     const p = id && pendingPlans[id];
     if (!p || p.busy || undoBusy) return;
-    if (btn.classList.contains('next-plan-copy-config')) {
-      try {await navigator.clipboard.writeText(p.setupFile.content);btn.textContent='Copiado!';} catch (_) {p.error='Use o arquivo ci/vertex-validation.yml incluído no ZIP.';wrap.innerHTML=planControls(p);}
-      return;
-    }
+    if (!btn.classList.contains('next-plan-apply') && !btn.classList.contains('next-plan-cancel')) return;
     p.busy = true;
     clearTimeout(p.timer);p.timer = null;
     wrap.innerHTML = planControls(p);
@@ -782,6 +747,7 @@
         return;
       }
       if (btn.classList.contains('next-plan-apply')) {
+        if (p.requiresValidation || p.checkpoint) throw new Error('Cancele este plano antigo e envie o pedido novamente.');
         const data = await planRequest(p,'confirm_plan',{reviewAcknowledged:true});
         await rememberCommitResult(data,p.repo,p.projectKey,p.prompt,await projectMemoryStore.scope(p.owner,p.repo,p.projectKey));
         if(p.jobId)await settlePlanJob(p.jobId,false);
@@ -789,15 +755,10 @@
         wrap.innerHTML = `<span class="next-plan-status ok">✅ Commit <a href="${escapeHtml(data.commit_url)}" target="_blank" rel="noopener noreferrer">${(data.commit_sha||'').slice(0,7)}</a> aplicado.</span>${data.undo_token ? undoButton(data.commit_sha) : ''}`;
         return;
       }
-      p.requiresValidation = true;
-      const action = btn.classList.contains('next-plan-setup') ? 'validation_setup' : btn.classList.contains('next-plan-check') ? 'validation_status' : 'validation_start';
-      await planRequest(p,action,action === 'validation_setup' ? {setupAcknowledged:true} : {});
-
     } catch(e) {p.error = e.message || String(e);}
     p.busy = false;
     wrap.innerHTML = planControls(p);
     await savePendingPlan(id).catch(()=>{p.error = 'Não foi possível salvar o plano para recuperação.';wrap.innerHTML=planControls(p);});
-    schedulePlanCheck(id,wrap);
   });
 
   // Memória curta da conversa: guarda o texto puro (sem HTML) das últimas
@@ -3021,7 +2982,7 @@
       const tasksHtml = Array.isArray(data.tasks) && data.tasks.length
           ? '<div class="next-agent-tasks"><b>Etapas do pedido</b>' + data.tasks.map(task =>
             `<div class="next-agent-task"><span>${task.status === 'prepared' ? '☑ Código preparado' : '◷ Pendente'}</span><br>${escapeHtml(task.title)}${task.detail ? `<br><small>${escapeHtml(task.detail)}</small>` : ''}</div>`
-          ).join('') + '<small>Build e testes de execução ainda não realizados.</small></div>' : '';
+          ).join('') + '</div>' : '';
 
       const reviewHtml = globalThis.VertexCodeReview.render(data.files,data.review_base,data.assets);
       // O backend preparou arquivos sem commitar. No modo comum, há uma

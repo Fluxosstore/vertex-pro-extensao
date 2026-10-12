@@ -14,8 +14,10 @@ vm.createContext(ctx);vm.runInContext(fs.readFileSync(require('node:path').join(
 const blocked=p=>/next-plan-apply" disabled/.test(ctx.planControls(p));
 (async()=>{
  assert(!ctx.planControls({}).includes('Validar build'));assert(ctx.planControls({}).includes('Aprovar commit'));
- assert(blocked({requiresValidation:true}));assert(blocked({requiresValidation:true,validation:{state:'failure',publishable:false}}));assert(!blocked({requiresValidation:true,validation:{state:'passed',publishable:true}}));
- assert(ctx.planControls({requiresValidation:true,validation:{state:'passed',tests:'not_configured'}}).includes('sem testes configurados'));
+ for (const p of [{requiresValidation:true},{checkpoint:true},{requiresValidation:true,validation:{state:'passed',publishable:true}}]) {
+   const html=ctx.planControls(p);assert(!html.includes('next-plan-apply'));assert(html.includes('next-plan-cancel'));assert(html.includes('versão anterior'));assert(!/build|testes|next-plan-validate/i.test(html));
+ }
+ assert(blocked({busy:true}));
  assert(ctx.planControls({error:'<img src=x onerror=alert(1)>'}).includes('&lt;img'));
  assert(!ctx.planControls({validation:{url:'javascript:alert(1)'}}).includes('href='));
  const id='plano_123-ab';const p={repo,projectKey:project,files:[{path:'src/a.js',content:'x'}],token:'old',prompt:'change',expiresAt:Date.now()+60000};ctx.pendingPlans[id]=p;
@@ -23,5 +25,5 @@ const blocked=p=>/next-plan-apply" disabled/.test(ctx.planControls(p));
  delete ctx.pendingPlans[id];license='two';await ctx.restorePendingPlans();assert.equal(bubbles.length,1);await assert.rejects(()=>ctx.planRequest(p,'validation_status'),/licença mudou/);assert.equal(requests,0);
  license='one';project='project-b';await assert.rejects(()=>ctx.planRequest(p,'confirm_plan'),/projeto mudou/);assert.equal(requests,0);
  project='project-a';await ctx.planRequest(p,'validation_status');assert.equal(p.token,'updated');assert.equal(p.expiresAt,123456789);assert(p.validation.publishable);
- console.log('PASS: controls block pending/failed checks, safe rendering, saved plans restored once, account/project isolation, signed checkpoint updated.');
+ console.log('PASS: controls remove CI actions and require regeneration of legacy signed plans, safe rendering, saved plans restored once, account/project isolation, signed checkpoint updated.');
 })().catch(e=>{console.error(e);process.exit(1)});
