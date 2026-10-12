@@ -30,9 +30,9 @@
   align-items: center !important;
   justify-content: center !important;
   cursor: grab !important;
-  box-shadow: 0 6px 20px rgba(124,58,237,.35) !important;
+  box-shadow: none !important;
   z-index: 2147483647 !important;
-  overflow: hidden !important;
+  overflow: visible !important;
   visibility: visible !important;
   opacity: 1 !important;
   pointer-events: auto !important;
@@ -44,17 +44,19 @@
   -webkit-user-select: none !important;
   -webkit-tap-highlight-color: transparent !important;
 }
-#nextLauncher:hover{ box-shadow: 0 8px 26px rgba(124,58,237,.5) !important; }
+#nextLauncher:hover .next-launcher-img{ filter: drop-shadow(0 4px 10px rgba(124,58,237,.55)) !important; }
 #nextLauncher:active{ cursor: grabbing !important; }
 .next-launcher-img{
   width: 100% !important;
   height: 100% !important;
   /* cover + sem padding: o logo preenche o círculo inteiro,
      sem sobrar borda branca em volta */
-  object-fit: cover !important;
+  object-fit: contain !important;
   padding: 0 !important;
   margin: 0 !important;
-  border-radius: 50% !important;
+  border-radius: 0 !important;
+  background: none !important;
+  filter: drop-shadow(0 3px 7px rgba(124,58,237,.35)) !important;
   display: block !important;
   pointer-events: none !important;  /* o arraste é do botão, não da imagem */
   -webkit-user-drag: none !important;
