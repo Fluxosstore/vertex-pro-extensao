@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Vertex Pro",
-  "version": "3.5.11",
+  "version": "3.5.12",
   "description": "Vertex Pro: painel, licen\u00e7a e edi\u00e7\u00e3o de projetos via GitHub com IA.",
   "icons": {
     "16": "icons/icon16.png",

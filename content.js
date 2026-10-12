@@ -764,6 +764,7 @@
           bubble.querySelector('[data-panel="review"]')?.remove();
           bubble.querySelector('.vtx-msg-panel[data-kind="review"]')?.remove();
           wrap.remove();
+          settleEditBubble(bubble, p.reasoning, `Pronto! Alterei ${changed.map(f=>f.split('/').pop()).join(', ')}.`);
         } else {
           wrap.innerHTML = `<span class="next-plan-status ok">${reply}</span>`;
         }
@@ -971,6 +972,25 @@
     dockChatMessages.appendChild(bolha);
     dockChatMessages.scrollTop = dockChatMessages.scrollHeight;
     return bolha;
+  }
+  // Depois de 10s o cartão verde "Prontinho" vira uma resposta normal da IA:
+  // o resumo do que ela fez, com o link do commit e o botão Desfazer discretos.
+  function settleEditBubble(bubble, summary, fallback) {
+    setTimeout(() => {
+      const lead = bubble?.isConnected ? bubble.querySelector('.vtx-lead') : null;
+      if (!lead) return;
+      const link = lead.querySelector('a'), undo = lead.querySelector('.next-undo-open');
+      const text = String(summary || '').replace(/\s+/g, ' ').trim().slice(0, 500) || fallback || 'Pronto! A alteração foi publicada.';
+      lead.textContent = '';
+      const body = document.createElement('div'); body.className = 'vtx-summary'; body.textContent = text; lead.appendChild(body);
+      if (link || undo) {
+        const after = document.createElement('div'); after.className = 'vtx-after';
+        if (link) { link.textContent = 'Ver commit'; after.appendChild(link); }
+        if (undo) after.appendChild(undo);
+        lead.appendChild(after);
+      }
+      bubble.classList.remove('edit', 'plano'); bubble.classList.add('settled');
+    }, 10000);
   }
   function clockTime() {
     return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -3031,7 +3051,7 @@
     }
     try {
       const {job}=await jobRequest(ticket,'job_diagnostic');
-      const report=['Vertex Pro 3.5.11',`Comando: ${job.id}`,`Projeto: ${job.repo}`,`Estado: ${job.status}`,`Etapa: ${job.stage}`,`Commit: ${job.commit_sha || 'não registrado'}`,`Link: ${job.commit_url || '-'}`,`Início: ${job.created_at}`,`Atualização: ${job.updated_at}`,`Código: ${job.error_code || '-'}`,`Erro: ${job.error_message || '-'}`,
+      const report=['Vertex Pro 3.5.12',`Comando: ${job.id}`,`Projeto: ${job.repo}`,`Estado: ${job.status}`,`Etapa: ${job.stage}`,`Commit: ${job.commit_sha || 'não registrado'}`,`Link: ${job.commit_url || '-'}`,`Início: ${job.created_at}`,`Atualização: ${job.updated_at}`,`Código: ${job.error_code || '-'}`,`Erro: ${job.error_message || '-'}`,
         ...(job.events || []).map(x=>`${x.at}: ${x.stage}`)].join('\n');
       try {await navigator.clipboard.writeText(report);} catch(_) {
         const input=document.createElement('textarea');input.value=report;input.style.cssText='position:fixed;left:-9999px;top:0';document.body.appendChild(input);input.select();
@@ -3120,7 +3140,7 @@
         return false;
       }
       if(op.projectKey!==getProjectContextKey() || op.repo!==ghActiveRepo)throw Error('O projeto mudou. Volte a ele para recuperar este comando.');
-      if(data.engine && isDocked())addDockChatMessage('ai',globalThis.VertexAuroraEngine.render(data.engine),'plano');
+      if(data.engine && isDocked())op.engineHtml=globalThis.VertexAuroraEngine.render(data.engine);
       // Uma imagem inválida é rejeitada antes de consumir a cota no servidor.
       // The job ID deduplicates local accounting; the server charges once per job.
       if (isDocked()) await hideDockThinking();
@@ -3161,7 +3181,7 @@
           ghShowMsg('A proposta chegou incompleta. Envie novamente.', true);
           return false;
         }
-        op.details = tasksHtml + reviewHtml;
+        op.details = (op.engineHtml || '') + tasksHtml + reviewHtml;
         op.phase = 'countdown';
         if (isDocked()) op.statusBubble = addDockChatMessage('ai', 'Alteração preparada. Commit em 6 segundos; toque no quadrado para cancelar.', 'plano');
         else ghShowMsg('Alteração preparada. Commit em 6 segundos; toque no quadrado para cancelar.');
@@ -3216,12 +3236,12 @@
         pendingPlans[planoId] = {
           files: data.files, assets: data.assets || [], token: data.plan_token, reviewBase:data.review_base,engine:data.engine,jobId:op.jobTicket?.id,
           repo: ghActiveRepo, projectKey: getProjectContextKey(), prompt,
-          requiresValidation:data.requires_validation === true,expiresAt:Date.now()+14*60000,
+          requiresValidation:data.requires_validation === true,reasoning:data.reasoning,expiresAt:Date.now()+14*60000,
         };
         await savePendingPlan(planoId).catch(()=>{});
         const planBubble = addDockChatMessage('ai',
           `<div class="vtx-lead">${data.requires_manual_review ? 'Revise as etapas e pendências antes de aprovar. ' : ''}Alterações preparadas em ${arquivos.length} arquivo(s), ainda não publicadas.</div>`,
-          'plano', { files: arquivos, details: tasksHtml + reviewHtml, reasoning: data.reasoning });
+          'plano', { files: arquivos, details: (op.engineHtml || '') + tasksHtml + reviewHtml, reasoning: data.reasoning });
         planBubble?.insertAdjacentHTML('beforeend', `<div class="next-dock-plan-actions" data-plan-id="${planoId}">${planControls(pendingPlans[planoId])}</div>`);
         await saveSuccessfulTurn(op.memoryScope,prompt,`[Plano proposto em ${arquivos.length} arquivo(s), aguardando aprovação; nenhuma alteração aplicada.]`).catch(()=>{});
         ghAnexos = [];
@@ -3244,7 +3264,8 @@
 
       if (isDocked()) {
         const arquivos = (data.files_changed || []).map(f => f.split('/').pop()).join(', ');
-        addDockChatMessage('ai', `✅ Prontinho! Alterei <b>${(data.files_changed||[]).length}</b> arquivo(s): ${escapeHtml(arquivos)}.<br><a href="${data.commit_url}" target="_blank" rel="noopener noreferrer">Ver commit no GitHub</a>${data.undo_token ? '<br>'+undoButton(data.commit_sha) : ''}`, 'edit', { files: data.files_changed || [], details: op.details || '', reasoning: data.reasoning });
+        const doneBubble = addDockChatMessage('ai', `<div class="vtx-lead">✅ Prontinho! Alterei <b>${(data.files_changed||[]).length}</b> arquivo(s): ${escapeHtml(arquivos)}.<br><a href="${data.commit_url}" target="_blank" rel="noopener noreferrer">Ver commit no GitHub</a>${data.undo_token ? '<br>'+undoButton(data.commit_sha) : ''}</div>`, 'edit', { files: data.files_changed || [], details: (op.engineHtml || '') + (op.details || ''), reasoning: data.reasoning });
+        settleEditBubble(doneBubble, data.reasoning, `Pronto! Alterei ${arquivos}.`);
         // Guarda um resumo curto na memória (não o raciocínio inteiro),
         // só o suficiente pra Aurora lembrar o que já foi feito se o
         // cliente continuar a conversa ("agora faz o mesmo no outro botão").

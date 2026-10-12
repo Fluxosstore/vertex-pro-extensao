@@ -2105,3 +2105,10 @@
 #next-widget-root .next-dock-msg .next-dock-plan-actions .next-plan-cancel{ background: transparent; }
 #next-widget-root .next-dock-msg .vtx-reasoning{ margin: 8px 0 0; font-size: 12.5px; opacity: .8; }
 #next-widget-root .vtx-msg-panel[data-kind="review"]{ max-height: 260px; overflow: auto; font-size: 12.5px; }
+
+/* 3.5.12 — após 10s o cartão vira resposta normal */
+#next-widget-root .next-dock-msg.ai.settled{ animation: vtxFadeIn .35s ease both; }
+#next-widget-root .next-dock-msg .vtx-summary{ line-height: 1.5; }
+#next-widget-root .next-dock-msg .vtx-after{ display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; }
+#next-widget-root .next-dock-msg .vtx-after a{ font-weight: 600; }
+#next-widget-root .next-dock-msg .vtx-after .next-undo-open{ padding: 3px 10px; font-size: 12px; border-radius: 999px; }
