@@ -1,3 +1,5 @@
+> Atualização 3.5.7: removido o card redundante de proposta pronta após a resposta da Aurora.
+
 > Atualização 3.5.6: removidos os controles de build e testes da interface. Veja STATUS-3.5.6.md.
 
 > Atualização 3.5.5: seleção precisa de imagens e registro de publicação por comando. Veja STATUS-3.5.5.md.

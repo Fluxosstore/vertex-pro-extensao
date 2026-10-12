@@ -2786,6 +2786,12 @@
   }
   function showJobTicket(ticket,job={}) {
     let card=root.querySelector(`[data-agent-job="${ticket.id}"]`);
+    // The response or approval plan already carries the completed result.
+    // Do not leave a second "Proposta pronta" card or restore it later.
+    if (job.status === 'ready' || job.stage === 'prepared' || job.commit_sha) {
+      if (card) (card.closest('.next-dock-msg') || card.parentElement).remove();
+      return;
+    }
     if (!card) {
       const html=`<div class="next-agent-job" data-agent-job="${ticket.id}"><small>Comando ${ticket.id}</small><div class="next-job-state"></div><div class="next-job-trace"></div><div class="next-job-actions"><button type="button" class="next-job-resume">Consultar andamento</button><button type="button" class="next-job-report">Copiar diagnóstico</button></div></div>`;
       if (isDocked()) addDockChatMessage('ai',html,'plano');
