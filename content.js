@@ -892,14 +892,14 @@
 
   function messageCopyText(element) {
     const clone = element.cloneNode(true);
-    clone.querySelectorAll('button, .next-dock-plan-actions').forEach((node) => node.remove());
+    clone.querySelectorAll('button, .next-dock-plan-actions, .vtx-msg-actions, .vtx-msg-panel').forEach((node) => node.remove());
     clone.querySelectorAll('br').forEach((node) => node.replaceWith('\n'));
     clone.querySelectorAll('p, li, pre, div').forEach((node) => node.append('\n'));
     return clone.textContent.trim();
   }
 
   function addMessageCopyButton(element) {
-    if (!element || element.querySelector(':scope > .next-copy-message') || !element.textContent.trim()) return;
+    if (!element || element.querySelector('.next-copy-message') || !element.textContent.trim()) return;
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'next-copy-message';
@@ -927,7 +927,12 @@
       button.setAttribute('aria-label', copied ? 'Resposta copiada' : 'Falha ao copiar. Tente novamente');
       setTimeout(() => { button.innerHTML = icon; button.setAttribute('aria-label', 'Copiar resposta'); }, 2200);
     });
-    element.appendChild(button);
+    actionsRow(element).appendChild(button);
+  }
+  function actionsRow(element) {
+    let row = element.querySelector(':scope > .vtx-msg-actions');
+    if (!row) { row = document.createElement('div'); row.className = 'vtx-msg-actions'; element.appendChild(row); }
+    return row;
   }
 
   // Reinsere o botão também quando um plano/progresso vira resultado ou erro.
@@ -937,17 +942,37 @@
   });
   copyObserver.observe(dockChatMessages, { childList: true, subtree: true });
 
-  function addDockChatMessage(role, text, tipo) {
+  function addDockChatMessage(role, text, tipo, opts = {}) {
     if (!dockChatMessages) return;
     const vazio = dockChatMessages.querySelector('.next-dock-chat-empty');
     if (vazio) vazio.remove();
     const bolha = document.createElement('div');
     bolha.className = `next-dock-msg ${role === 'user' ? 'user' : 'ai'}${tipo ? ' ' + tipo : ''}`;
+    bolha.dataset.time = clockTime();
     bolha.innerHTML = text; // já vem escapado/formatado por quem chama
-    if (role !== 'user') addMessageCopyButton(bolha);
+    if (role !== 'user') { addMessageExtras(bolha, tipo, opts); addMessageCopyButton(bolha); }
     dockChatMessages.appendChild(bolha);
     dockChatMessages.scrollTop = dockChatMessages.scrollHeight;
     return bolha;
+  }
+  function clockTime() {
+    return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  }
+  // Botões sob a resposta: "Ver detalhes" (como a Aurora pensou) e "N arquivos".
+  function addMessageExtras(bolha, tipo, opts) {
+    if (tipo === 'erro' || tipo === 'pensamento') return;
+    const row = actionsRow(bolha);
+    const trace = !opts.noTrace && dockLastTrace && dockLastTrace.steps.length ? dockLastTrace : null;
+    if (trace) {
+      dockLastTrace = null;
+      row.insertAdjacentHTML('beforeend', `<button type="button" class="vtx-chip" data-panel="trace" aria-expanded="false">${LAMP_SVG}<span>Ver detalhes</span></button>`);
+      bolha.insertAdjacentHTML('beforeend', `<div class="vtx-msg-panel" data-kind="trace" hidden><div class="vtx-think-pill">${LAMP_SVG}<b>Pensou por ${fmtSeconds(trace.total)}</b></div><ul class="vtx-think-steps">${stepsMarkup(trace.steps, trace.total, true)}</ul></div>`);
+    }
+    const paths = Array.isArray(opts.files) ? opts.files.filter((p) => typeof p === 'string') : [];
+    if (paths.length) {
+      row.insertAdjacentHTML('beforeend', `<button type="button" class="vtx-chip" data-panel="files" aria-expanded="false">${CODE_SVG}<span>${paths.length} ${paths.length === 1 ? 'arquivo' : 'arquivos'}</span></button>`);
+      bolha.insertAdjacentHTML('beforeend', `<div class="vtx-msg-panel" data-kind="files" hidden>${paths.map((p) => `<div class="vtx-file-line">${escapeHtml(p)}</div>`).join('')}</div>`);
+    }
   }
   function escapeHtml(s) {
     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -963,43 +988,124 @@
   // resposta de verdade chegar (nunca finge terminar sem confirmação).
   let dockThinkingShownAt = 0;
   let dockStepTimer = null;
+  let dockTicker = null;
+  let dockThinkingSteps = [];
+  let dockLastTrace = null;
   const DOCK_THINKING_MIN_MS = 700;
-  const DOCK_STEPS = ['Analisando o projeto', 'Escolhendo o arquivo certo', 'Gerando as alterações', 'Verificando sintaxe e estilo'];
-  const DOCK_STEP_DELAYS = [900, 2600, 6000]; // ms até passar pro próximo passo
+  const LAMP_SVG = '<svg class="vtx-lamp" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg>';
+  const CODE_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5"/></svg>';
+  const CHEV_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+  // Etapas reais do pipeline (eventos do comando) agrupadas em rótulos curtos.
+  const TRACE_LABELS = {
+    queued: 'Conexões e edição preparadas', starting: 'Conexões e edição preparadas', quota_accepted: 'Conexões e edição preparadas',
+    coordinating: 'Entendendo o pedido', analyzing: 'Entendendo o pedido',
+    selecting_files: 'Escolhendo os arquivos certos', reading_files: 'Lendo o código do projeto',
+    generating: 'Escrevendo as alterações', checking: 'Conferindo sintaxe e imports',
+    reviewing: 'Revisão independente', review_passed: 'Revisão independente', review_blocked: 'Revisão independente', review_incomplete: 'Revisão independente',
+    repairing: 'Corrigindo sozinha', preparing_plan: 'Preparando a proposta',
+  };
+  const TRACE_DESCS = {
+    'Conexões e edição preparadas': 'Licença, GitHub e repositório conferidos antes de começar.',
+    'Entendendo o pedido': 'Lendo o que você pediu e montando o mapa do projeto.',
+    'Escolhendo os arquivos certos': 'Decidindo quais arquivos precisam mudar, sem mexer no resto.',
+    'Lendo o código do projeto': 'Lendo os arquivos escolhidos e os que dependem deles.',
+    'Escrevendo as alterações': 'Preparando só os trechos que precisam mudar.',
+    'Conferindo sintaxe e imports': 'Verificando se o código continua válido e sem imports quebrados.',
+    'Revisão independente': 'Uma segunda checagem procura problemas antes de propor a mudança.',
+    'Corrigindo sozinha': 'A revisão achou algo e a Aurora está ajustando.',
+    'Preparando a proposta': 'Montando o resumo e as alterações para você aprovar.',
+  };
+  const DOCK_STEPS = ['Conexões e edição preparadas', 'Entendendo o pedido', 'Escolhendo os arquivos certos', 'Escrevendo as alterações'];
+  const DOCK_STEP_DELAYS = [900, 2600, 6000]; // só enquanto o servidor ainda não mandou eventos reais
+  function fmtSeconds(ms) { return Math.max(0, Math.round(ms / 1000)) + 's'; }
+  function thinkingEl() { return dockChatMessages?.querySelector('#nextDockThinking'); }
+  function stepMs(step, total) {
+    return step.end != null ? Math.max(0, step.end - step.start) : Math.max(0, Math.min(Date.now() - step.start, total));
+  }
+  function stepsMarkup(steps, total, finished) {
+    return steps.map((step, i) => {
+      const active = !finished && step.end == null && i === steps.length - 1;
+      return `<li class="vtx-step ${active ? 'active' : 'done'}" data-label="${escapeHtml(step.label)}"><div class="vtx-step-row"><span class="vtx-step-icon"></span><span class="vtx-step-label">${escapeHtml(step.label)}</span><span class="vtx-step-time">${fmtSeconds(stepMs(step, total))}</span><span class="vtx-step-chev">${CHEV_SVG}</span></div><div class="vtx-step-desc">${escapeHtml(TRACE_DESCS[step.label] || '')}</div></li>`;
+    }).join('');
+  }
+  function paintThinking() {
+    const el = thinkingEl();
+    const list = el?.querySelector('.vtx-think-steps');
+    if (!list) return;
+    const openLabels = new Set([...list.querySelectorAll('.vtx-step.open')].map((li) => li.dataset.label));
+    list.innerHTML = stepsMarkup(dockThinkingSteps, Date.now() - dockThinkingShownAt, false);
+    list.querySelectorAll('.vtx-step').forEach((li) => { if (openLabels.has(li.dataset.label)) li.classList.add('open'); });
+  }
+  function tickThinking() {
+    const el = thinkingEl();
+    if (!el) return;
+    const total = Date.now() - dockThinkingShownAt;
+    const elapsed = el.querySelector('.vtx-think-elapsed');
+    if (elapsed) elapsed.textContent = fmtSeconds(total) + ' decorridos';
+    const pill = el.querySelector('.vtx-think-pill-time');
+    if (pill) pill.textContent = fmtSeconds(total);
+    const active = el.querySelector('.vtx-step.active');
+    const step = dockThinkingSteps[dockThinkingSteps.length - 1];
+    if (active && step) active.querySelector('.vtx-step-time').textContent = fmtSeconds(stepMs(step, total));
+  }
+  // Troca as etapas de aproximação por eventos reais vindos do servidor.
+  function setDockThinkingFromEvents(events, label) {
+    if (!thinkingEl()) return;
+    const steps = [];
+    for (const event of Array.isArray(events) ? events : []) {
+      const rotulo = TRACE_LABELS[event?.stage];
+      const at = Date.parse(event?.at);
+      if (!rotulo || !Number.isFinite(at)) continue;
+      if (steps.length && steps[steps.length - 1].label === rotulo) continue;
+      if (steps.length) steps[steps.length - 1].end = at;
+      steps.push({ label: rotulo, start: at, end: null });
+    }
+    if (!steps.length) return;
+    dockThinkingSteps = steps;
+    paintThinking();
+    tickThinking();
+    void label;
+  }
   function showDockThinking() {
     if (!dockChatMessages) return;
     const vazio = dockChatMessages.querySelector('.next-dock-chat-empty');
     if (vazio) vazio.remove();
     dockChatMessages.querySelector('#nextDockThinking')?.remove();
+    clearTimeout(dockStepTimer);
+    clearInterval(dockTicker);
     const bolha = document.createElement('div');
     bolha.className = 'next-dock-msg ai next-dock-thinking';
     bolha.id = 'nextDockThinking';
-    bolha.innerHTML = '<div class="next-dock-steps">' + DOCK_STEPS.map((label, i) =>
-      `<div class="next-dock-step${i === 0 ? ' active' : ''}" data-step="${i}"><span class="next-dock-step-icon"></span><span class="next-dock-step-label">${escapeHtml(label)}</span></div>`
-    ).join('') + '</div>';
+    bolha.dataset.time = clockTime();
+    bolha.innerHTML =
+      `<div class="vtx-think-head"><span class="vtx-think-bulb">${LAMP_SVG}</span><div class="vtx-think-title"><b class="vtx-shimmer">PENSANDO...</b><small class="vtx-think-elapsed">0s decorridos</small></div></div>` +
+      `<div class="vtx-think-actions"><button type="button" class="vtx-think-toggle">${LAMP_SVG}<span>Ver detalhes</span></button><button type="button" class="vtx-think-cancel">Cancelar</button></div>` +
+      `<div class="vtx-think-details"><div class="vtx-think-inner"><div class="vtx-think-pill">${LAMP_SVG}<b class="vtx-shimmer">PENSANDO...</b><span class="vtx-think-pill-time">0s</span>${CHEV_SVG}</div><ul class="vtx-think-steps"></ul></div></div>`;
     dockChatMessages.appendChild(bolha);
     dockChatMessages.scrollTop = dockChatMessages.scrollHeight;
     dockThinkingShownAt = Date.now();
+    dockLastTrace = null;
+    dockThinkingSteps = [{ label: DOCK_STEPS[0], start: dockThinkingShownAt, end: null }];
+    paintThinking();
+    dockTicker = setInterval(tickThinking, 1000);
 
-    let stepAtual = 0;
-    function ativarProximo() {
-      const bolhaAtual = document.getElementById('nextDockThinking');
-      if (!bolhaAtual) return; // já foi removida (resposta chegou antes)
-      const atual = bolhaAtual.querySelector(`.next-dock-step[data-step="${stepAtual}"]`);
-      if (atual) { atual.classList.remove('active'); atual.classList.add('done'); }
-      stepAtual++;
-      if (stepAtual >= DOCK_STEPS.length) return;
-      const proximo = bolhaAtual.querySelector(`.next-dock-step[data-step="${stepAtual}"]`);
-      if (proximo) proximo.classList.add('active');
-      if (stepAtual < DOCK_STEPS.length - 1) {
-        dockStepTimer = setTimeout(ativarProximo, DOCK_STEP_DELAYS[stepAtual]);
-      }
+    // Aproximação por tempo até chegarem eventos reais; a ordem segue o pipeline
+    // e o último passo fica girando até a resposta chegar.
+    let atual = 0;
+    function proximo() {
+      if (!thinkingEl()) return;
+      atual++;
+      if (atual >= DOCK_STEPS.length) return;
+      const agora = Date.now();
+      dockThinkingSteps[dockThinkingSteps.length - 1].end = agora;
+      dockThinkingSteps.push({ label: DOCK_STEPS[atual], start: agora, end: null });
+      paintThinking();
+      if (atual < DOCK_STEPS.length - 1) dockStepTimer = setTimeout(proximo, DOCK_STEP_DELAYS[atual]);
     }
-    dockStepTimer = setTimeout(ativarProximo, DOCK_STEP_DELAYS[0]);
+    dockStepTimer = setTimeout(proximo, DOCK_STEP_DELAYS[0]);
   }
   // Espera o tempo mínimo (se precisar) e SÓ DEPOIS remove — assim quem
-  // chama pode aguardar isso antes de inserir a resposta de verdade, e as
-  // bolinhas nunca ficam "presas" acima da resposta já chegada.
+  // chama pode aguardar isso antes de inserir a resposta de verdade.
   async function hideDockThinking() {
     if (dockStepTimer) { clearTimeout(dockStepTimer); dockStepTimer = null; }
     if (dockThinkingShownAt) {
@@ -1008,9 +1114,40 @@
         await new Promise((r) => setTimeout(r, DOCK_THINKING_MIN_MS - passou));
       }
     }
-    dockChatMessages?.querySelector('#nextDockThinking')?.remove();
+    clearInterval(dockTicker); dockTicker = null;
+    if (thinkingEl() && dockThinkingSteps.length) {
+      const fim = Date.now();
+      const steps = dockThinkingSteps.map((step) => ({ ...step, end: step.end != null ? step.end : fim }));
+      dockLastTrace = { steps, total: fim - dockThinkingShownAt };
+    }
+    thinkingEl()?.remove();
     dockThinkingShownAt = 0;
+    dockThinkingSteps = [];
   }
+  dockChatMessages?.addEventListener('click', (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) return;
+    const toggle = target.closest('.vtx-think-toggle');
+    if (toggle) {
+      const card = toggle.closest('.next-dock-thinking');
+      const open = card.classList.toggle('open');
+      toggle.querySelector('span').textContent = open ? 'Ocultar detalhes' : 'Ver detalhes';
+      dockChatMessages.scrollTop = dockChatMessages.scrollHeight;
+      return;
+    }
+    if (target.closest('.vtx-think-cancel')) { if (activeEdit) cancelActiveEdit(); return; }
+    const row = target.closest('.vtx-step-row');
+    if (row) { row.parentElement.classList.toggle('open'); return; }
+    const chip = target.closest('.vtx-chip[data-panel]');
+    if (chip) {
+      const message = chip.closest('.next-dock-msg');
+      const panel = message?.querySelector(`.vtx-msg-panel[data-kind="${chip.dataset.panel}"]`);
+      if (!panel) return;
+      panel.hidden = !panel.hidden;
+      chip.setAttribute('aria-expanded', String(!panel.hidden));
+      if (chip.dataset.panel === 'trace') chip.querySelector('span').textContent = panel.hidden ? 'Ver detalhes' : 'Ocultar detalhes';
+    }
+  });
 
   function showStatus(text) {
     statusText.textContent = text;
@@ -2800,9 +2937,7 @@
     }
     const label=job.commit_sha ? `Publicado no GitHub: ${job.commit_sha.slice(0,7)}` : job.status==='failed' ? `Falhou: ${job.error_message || job.error_code || 'consulte o diagnóstico'}` : jobStages[job.stage] || 'Consultando comando';
     if (card) {card.querySelector('.next-job-state').textContent=label;const trace=card.querySelector('.next-job-trace');if(trace)trace.innerHTML=globalThis.VertexAuroraEngine.trace(job.events);}
-    clearTimeout(dockStepTimer);dockStepTimer=null;
-    const thinking=dockChatMessages?.querySelector('#nextDockThinking');
-    if (thinking) thinking.innerHTML=`<span>${escapeHtml(label)}</span>`;
+    if (Array.isArray(job.events) && job.events.some(e=>TRACE_LABELS[e?.stage])) {clearTimeout(dockStepTimer);dockStepTimer=null;setDockThinkingFromEvents(job.events,label);}
   }
   async function requestAgentJob(op,payload,resumeTicket) {
     await usageReady;
@@ -3071,7 +3206,8 @@
             `<div class="next-dock-plan-actions" data-plan-id="${planoId}">` +
             planControls(pendingPlans[planoId]) +
             `</div>`,
-          'plano'
+          'plano',
+          { files: arquivos }
         );
         await saveSuccessfulTurn(op.memoryScope,prompt,`[Plano proposto em ${arquivos.length} arquivo(s), aguardando aprovação; nenhuma alteração aplicada.]`).catch(()=>{});
         ghAnexos = [];
@@ -3104,7 +3240,7 @@
           addDockChatMessage('ai', `🔎 Consultei ${n} arquivo(s) relacionado(s) e conferi sintaxe e imports locais.${data.verification.self_repaired ? ' Corrigi uma tentativa antes de preparar o commit.' : ''}`, 'pensamento');
         }
         const arquivos = (data.files_changed || []).map(f => f.split('/').pop()).join(', ');
-        addDockChatMessage('ai', `✅ Prontinho! Alterei <b>${(data.files_changed||[]).length}</b> arquivo(s): ${escapeHtml(arquivos)}.<br><a href="${data.commit_url}" target="_blank" rel="noopener noreferrer">Ver commit no GitHub</a>${data.undo_token ? '<br>'+undoButton(data.commit_sha) : ''}`, 'edit');
+        addDockChatMessage('ai', `✅ Prontinho! Alterei <b>${(data.files_changed||[]).length}</b> arquivo(s): ${escapeHtml(arquivos)}.<br><a href="${data.commit_url}" target="_blank" rel="noopener noreferrer">Ver commit no GitHub</a>${data.undo_token ? '<br>'+undoButton(data.commit_sha) : ''}`, 'edit', { files: data.files_changed || [] });
         // Guarda um resumo curto na memória (não o raciocínio inteiro),
         // só o suficiente pra Aurora lembrar o que já foi feito se o
         // cliente continuar a conversa ("agora faz o mesmo no outro botão").
