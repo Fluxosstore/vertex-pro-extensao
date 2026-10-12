@@ -823,8 +823,11 @@
     const areas = root.querySelectorAll('#nextUndoArea,.next-inline-undo');
     const available = currentUndo && currentUndo.expiresAt > Date.now() && memoryScopeCurrent(loadedMemoryScope);
     for (const area of areas) {
-    area.hidden = !available;
-    if (!available) {area.innerHTML='';continue;}
+    // O cartão fixo "Última alteração" some: o botão Desfazer já está na resposta do chat.
+    // Ele só aparece para confirmar ou durante a reversão.
+    const idleTop = area.id === 'nextUndoArea' && !undoBusy && !undoConfirm;
+    area.hidden = !available || idleTop;
+    if (!available || idleTop) {area.innerHTML='';continue;}
     area.innerHTML = undoBusy ? '<span>Desfazendo alteração...</span>' : undoConfirm
       ? `<span>Desfazer a alteração ${escapeHtml(currentUndo.sha.slice(0,7))}? Isso restaura o código anterior com um novo commit.</span><div><button type="button" class="next-undo-confirm" data-commit-sha="${escapeHtml(currentUndo.sha)}">Confirmar reversão</button><button type="button" class="next-undo-dismiss">Manter alteração</button></div>`
       : `<span>Última alteração: ${escapeHtml(currentUndo.sha.slice(0,7))}</span>${undoButton(currentUndo.sha)}`;
@@ -3028,7 +3031,7 @@
     }
     try {
       const {job}=await jobRequest(ticket,'job_diagnostic');
-      const report=['Vertex Pro 3.5.10',`Comando: ${job.id}`,`Projeto: ${job.repo}`,`Estado: ${job.status}`,`Etapa: ${job.stage}`,`Commit: ${job.commit_sha || 'não registrado'}`,`Link: ${job.commit_url || '-'}`,`Início: ${job.created_at}`,`Atualização: ${job.updated_at}`,`Código: ${job.error_code || '-'}`,`Erro: ${job.error_message || '-'}`,
+      const report=['Vertex Pro 3.5.11',`Comando: ${job.id}`,`Projeto: ${job.repo}`,`Estado: ${job.status}`,`Etapa: ${job.stage}`,`Commit: ${job.commit_sha || 'não registrado'}`,`Link: ${job.commit_url || '-'}`,`Início: ${job.created_at}`,`Atualização: ${job.updated_at}`,`Código: ${job.error_code || '-'}`,`Erro: ${job.error_message || '-'}`,
         ...(job.events || []).map(x=>`${x.at}: ${x.stage}`)].join('\n');
       try {await navigator.clipboard.writeText(report);} catch(_) {
         const input=document.createElement('textarea');input.value=report;input.style.cssText='position:fixed;left:-9999px;top:0';document.body.appendChild(input);input.select();
