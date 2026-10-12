@@ -668,8 +668,8 @@
   function planControls(plano) {
     const error = plano.error ? `<div class="next-ci-error">${escapeHtml(plano.error)}</div>` : '';
     const legacy = plano.requiresValidation || plano.checkpoint;
-    return error + `<div role="status">${legacy ? 'Este plano pertence a uma versão anterior. Cancele-o e envie o pedido novamente.' : 'Alterações preparadas, ainda não publicadas.'}</div>` +
-      (legacy ? '' : `<button type="button" class="next-plan-btn next-plan-apply" ${plano.busy?'disabled':''}>Aprovar commit</button>`) +
+    return error + (legacy ? `<div role="status">Este plano pertence a uma versão anterior. Cancele-o e envie o pedido novamente.</div>` : '') +
+      (legacy ? '' : `<button type="button" class="next-plan-btn next-plan-apply" ${plano.busy?'disabled':''}>${plano.busy?'Publicando…':'Aprovar commit'}</button>`) +
       `<button type="button" class="next-plan-btn next-plan-cancel" ${plano.busy?'disabled':''}>Cancelar</button>`;
   }
   function planContextCurrent(plano) {
@@ -719,7 +719,7 @@
         if (pendingPlans[id] || p.owner !== owner || !planContextCurrent(p)) continue;
         pendingPlans[id] = p;
         const paths = p.files.map(f=>escapeHtml(f.path)).join('<br>') + globalThis.VertexAuroraEngine.render(p.engine) + globalThis.VertexCodeReview.render(p.files,p.reviewBase,p.assets);
-        addDockChatMessage('ai',`📋 <b>Plano recuperado</b><br>${escapeHtml(p.prompt)}<br>${paths}<div class="next-dock-plan-actions" data-plan-id="${id}">${planControls(p)}</div>`,'plano');
+        addDockChatMessage('ai',`<div class="vtx-lead">Plano recuperado: ${escapeHtml(String(p.prompt).slice(0,120))}</div><div class="next-dock-plan-actions" data-plan-id="${id}">${planControls(p)}</div>`,'plano',{files:(p.files||[]).map(f=>f.path).concat((p.assets||[]).map(a=>a.path))});
       }
     } finally {restoringPlans = false;}
   }
@@ -743,7 +743,9 @@
         if (memoryScopeCurrent(scope) && scope.owner === await planOwner()) {auroraHistory=projectMemoryStore.history(entry);memoryIndicator(entry);}
         delete pendingPlans[id];
         await savePendingPlan(id);
-        wrap.innerHTML = '<span class="next-plan-status">Plano descartado. Nenhuma alteração do plano foi publicada.</span>';
+        const cancelLead = wrap.closest('.next-dock-msg')?.querySelector('.vtx-lead');
+        if (cancelLead) { cancelLead.textContent = 'Plano descartado. Nada foi publicado.'; wrap.remove(); }
+        else wrap.innerHTML = '<span class="next-plan-status">Plano descartado. Nenhuma alteração do plano foi publicada.</span>';
         return;
       }
       if (btn.classList.contains('next-plan-apply')) {
@@ -752,7 +754,19 @@
         await rememberCommitResult(data,p.repo,p.projectKey,p.prompt,await projectMemoryStore.scope(p.owner,p.repo,p.projectKey));
         if(p.jobId)await settlePlanJob(p.jobId,false);
         delete pendingPlans[id];await savePendingPlan(id);
-        wrap.innerHTML = `<span class="next-plan-status ok">✅ Commit <a href="${escapeHtml(data.commit_url)}" target="_blank" rel="noopener noreferrer">${(data.commit_sha||'').slice(0,7)}</a> aplicado.</span>${data.undo_token ? undoButton(data.commit_sha) : ''}`;
+        const bubble = wrap.closest('.next-dock-msg');
+        const lead = bubble?.querySelector('.vtx-lead');
+        const changed = (data.files_changed && data.files_changed.length ? data.files_changed : [...(p.files||[]).map(f=>f.path),...(p.assets||[]).map(a=>a.path)]);
+        const reply = `✅ Prontinho! Alterei <b>${changed.length}</b> arquivo(s): ${escapeHtml(changed.map(f=>f.split('/').pop()).join(', '))}.<br><a href="${escapeHtml(data.commit_url)}" target="_blank" rel="noopener noreferrer">Ver commit no GitHub</a>${data.undo_token ? '<br>'+undoButton(data.commit_sha) : ''}`;
+        if (bubble && lead) {
+          lead.innerHTML = reply;
+          bubble.classList.remove('plano'); bubble.classList.add('edit');
+          bubble.querySelector('[data-panel="review"]')?.remove();
+          bubble.querySelector('.vtx-msg-panel[data-kind="review"]')?.remove();
+          wrap.remove();
+        } else {
+          wrap.innerHTML = `<span class="next-plan-status ok">${reply}</span>`;
+        }
         return;
       }
     } catch(e) {p.error = e.message || String(e);}
@@ -973,7 +987,11 @@
     if (trace) {
       dockLastTrace = null;
       row.insertAdjacentHTML('beforeend', `<button type="button" class="vtx-chip" data-panel="trace" aria-expanded="false">${LAMP_SVG}<span>Ver detalhes</span></button>`);
-      bolha.insertAdjacentHTML('beforeend', `<div class="vtx-msg-panel" data-kind="trace" hidden><div class="vtx-think-pill">${LAMP_SVG}<b>Pensou por ${fmtSeconds(trace.total)}</b></div><ul class="vtx-think-steps">${stepsMarkup(trace.steps, trace.total, true)}</ul></div>`);
+      bolha.insertAdjacentHTML('beforeend', `<div class="vtx-msg-panel" data-kind="trace" hidden><div class="vtx-think-pill">${LAMP_SVG}<b>Pensou por ${fmtSeconds(trace.total)}</b></div><ul class="vtx-think-steps">${stepsMarkup(trace.steps, trace.total, true)}</ul>${opts.reasoning ? `<p class="vtx-reasoning">${escapeHtml(opts.reasoning)}</p>` : ''}</div>`);
+    }
+    if (opts.details) {
+      row.insertAdjacentHTML('beforeend', `<button type="button" class="vtx-chip" data-panel="review" aria-expanded="false">${CODE_SVG}<span>Revisar alterações</span></button>`);
+      bolha.insertAdjacentHTML('beforeend', `<div class="vtx-msg-panel" data-kind="review" hidden>${opts.details}</div>`);
     }
     const paths = Array.isArray(opts.files) ? opts.files.filter((p) => typeof p === 'string') : [];
     if (paths.length) {
@@ -3010,7 +3028,7 @@
     }
     try {
       const {job}=await jobRequest(ticket,'job_diagnostic');
-      const report=['Vertex Pro 3.5.9',`Comando: ${job.id}`,`Projeto: ${job.repo}`,`Estado: ${job.status}`,`Etapa: ${job.stage}`,`Commit: ${job.commit_sha || 'não registrado'}`,`Link: ${job.commit_url || '-'}`,`Início: ${job.created_at}`,`Atualização: ${job.updated_at}`,`Código: ${job.error_code || '-'}`,`Erro: ${job.error_message || '-'}`,
+      const report=['Vertex Pro 3.5.10',`Comando: ${job.id}`,`Projeto: ${job.repo}`,`Estado: ${job.status}`,`Etapa: ${job.stage}`,`Commit: ${job.commit_sha || 'não registrado'}`,`Link: ${job.commit_url || '-'}`,`Início: ${job.created_at}`,`Atualização: ${job.updated_at}`,`Código: ${job.error_code || '-'}`,`Erro: ${job.error_message || '-'}`,
         ...(job.events || []).map(x=>`${x.at}: ${x.stage}`)].join('\n');
       try {await navigator.clipboard.writeText(report);} catch(_) {
         const input=document.createElement('textarea');input.value=report;input.style.cssText='position:fixed;left:-9999px;top:0';document.body.appendChild(input);input.select();
@@ -3140,7 +3158,7 @@
           ghShowMsg('A proposta chegou incompleta. Envie novamente.', true);
           return false;
         }
-        if (isDocked() && (tasksHtml || reviewHtml)) addDockChatMessage('ai', tasksHtml+reviewHtml, 'plano');
+        op.details = tasksHtml + reviewHtml;
         op.phase = 'countdown';
         if (isDocked()) op.statusBubble = addDockChatMessage('ai', 'Alteração preparada. Commit em 6 segundos; toque no quadrado para cancelar.', 'plano');
         else ghShowMsg('Alteração preparada. Commit em 6 segundos; toque no quadrado para cancelar.');
@@ -3172,11 +3190,9 @@
           if (op.statusBubble) op.statusBubble.textContent = result.error || 'Falha ao publicar o commit.';
           return false;
         }
-        if (op.statusBubble) op.statusBubble.textContent = 'Commit publicado.';
+        op.statusBubble?.remove();
         data = { ...data, ...result, mode: 'committed', reasoning: data.reasoning };
       }
-
-      if (data.note && isDocked()) addDockChatMessage('ai', escapeHtml(data.note), 'pensamento');
 
       // Modo Planejamento: a Aurora já gerou e validou o conteúdo, mas
       // não commitou — mostra um card com o plano e espera o cliente
@@ -3200,21 +3216,10 @@
           requiresValidation:data.requires_validation === true,expiresAt:Date.now()+14*60000,
         };
         await savePendingPlan(planoId).catch(()=>{});
-        if (data.reasoning) addDockChatMessage('ai', `💭 ${escapeHtml(data.reasoning)}`, 'pensamento');
-        if (data.verification) {
-          const n = Number(data.verification.inspected_files) || 0;
-          addDockChatMessage('ai', `🔎 Consultei ${n} arquivo(s) relacionado(s) e conferi sintaxe e imports locais.${data.verification.self_repaired ? ' Corrigi uma tentativa antes de propor o plano.' : ''}`, 'pensamento');
-        }
-        addDockChatMessage(
-          'ai',
-          `📋 <b>Plano proposto</b> — ${arquivos.length} arquivo(s):<br>${listaHtml}${tasksHtml}${reviewHtml}` +
-            (data.requires_manual_review ? '<p>Revise as etapas e eventuais pendências. Aprovar publica somente o código preparado acima.</p>' : '') +
-            `<div class="next-dock-plan-actions" data-plan-id="${planoId}">` +
-            planControls(pendingPlans[planoId]) +
-            `</div>`,
-          'plano',
-          { files: arquivos }
-        );
+        const planBubble = addDockChatMessage('ai',
+          `<div class="vtx-lead">${data.requires_manual_review ? 'Revise as etapas e pendências antes de aprovar. ' : ''}Alterações preparadas em ${arquivos.length} arquivo(s), ainda não publicadas.</div>`,
+          'plano', { files: arquivos, details: tasksHtml + reviewHtml, reasoning: data.reasoning });
+        planBubble?.insertAdjacentHTML('beforeend', `<div class="next-dock-plan-actions" data-plan-id="${planoId}">${planControls(pendingPlans[planoId])}</div>`);
         await saveSuccessfulTurn(op.memoryScope,prompt,`[Plano proposto em ${arquivos.length} arquivo(s), aguardando aprovação; nenhuma alteração aplicada.]`).catch(()=>{});
         ghAnexos = [];
         renderAnexos();
@@ -3235,18 +3240,8 @@
       await rememberCommitResult(data,op.repo,op.projectKey,prompt,op.memoryScope);
 
       if (isDocked()) {
-        // Mostra o raciocínio da Aurora primeiro (o que ela decidiu fazer
-        // e por quê), depois a confirmação — assim fica claro que ela
-        // pensou antes de mexer, não saiu editando às cegas.
-        if (data.reasoning) {
-          addDockChatMessage('ai', `💭 ${escapeHtml(data.reasoning)}`, 'pensamento');
-        }
-        if (data.verification) {
-          const n = Number(data.verification.inspected_files) || 0;
-          addDockChatMessage('ai', `🔎 Consultei ${n} arquivo(s) relacionado(s) e conferi sintaxe e imports locais.${data.verification.self_repaired ? ' Corrigi uma tentativa antes de preparar o commit.' : ''}`, 'pensamento');
-        }
         const arquivos = (data.files_changed || []).map(f => f.split('/').pop()).join(', ');
-        addDockChatMessage('ai', `✅ Prontinho! Alterei <b>${(data.files_changed||[]).length}</b> arquivo(s): ${escapeHtml(arquivos)}.<br><a href="${data.commit_url}" target="_blank" rel="noopener noreferrer">Ver commit no GitHub</a>${data.undo_token ? '<br>'+undoButton(data.commit_sha) : ''}`, 'edit', { files: data.files_changed || [] });
+        addDockChatMessage('ai', `✅ Prontinho! Alterei <b>${(data.files_changed||[]).length}</b> arquivo(s): ${escapeHtml(arquivos)}.<br><a href="${data.commit_url}" target="_blank" rel="noopener noreferrer">Ver commit no GitHub</a>${data.undo_token ? '<br>'+undoButton(data.commit_sha) : ''}`, 'edit', { files: data.files_changed || [], details: op.details || '', reasoning: data.reasoning });
         // Guarda um resumo curto na memória (não o raciocínio inteiro),
         // só o suficiente pra Aurora lembrar o que já foi feito se o
         // cliente continuar a conversa ("agora faz o mesmo no outro botão").
