@@ -7,4 +7,9 @@ assert.equal(ctx.locateElement({...files,'src/Other.tsx':'<img src={ASSETS.heroW
 assert.equal(ctx.locateElement({'src/F.tsx':'<img src={other} className="w-full object-cover" />'},selected),null);
 assert.equal(ctx.locateElement({'src/F.tsx':'<img src="/a.jpg" /><img src="/a.jpg" />'},{tag:'img',attributes:{src:'/a.jpg'}}),null);
 assert.equal(ctx.locateElement({'src/F.tsx':'<img alt="Unique logo" src={photo} />'},{tag:'img',attributes:{alt:'Unique logo'}}).path,'src/F.tsx');
+const pr={'src/I.tsx':'<img src="https://i.pravatar.cc/100?img=11" alt="" /><img src="https://i.pravatar.cc/100?img=14" alt="" /><img src="https://i.pravatar.cc/100?img=1" alt="" />'};
+assert.equal(ctx.locateElement(pr,{tag:'img',attributes:{src:'https://i.pravatar.cc/100?img=14',currentSrc:'https://i.pravatar.cc/100?img=14',alt:''}}).path,'src/I.tsx');
+assert.equal(ctx.locateElement(pr,{tag:'img',attributes:{src:'https://i.pravatar.cc/100?img=1',alt:''}}).path,'src/I.tsx');
+assert.equal(ctx.locateElement({'src/I.tsx':'<img src="https://i.pravatar.cc/100?img=11" /><img src="https://i.pravatar.cc/100?img=11" />'},{tag:'img',attributes:{src:'https://i.pravatar.cc/100?img=11'}}),null);
+assert.equal(ctx.locateElement(pr,{tag:'img',attributes:{src:'https://i.pravatar.cc/100?img=99'}}),null);
 console.log('PASS: image source through config and mapped list, unique alt, duplicate/unknown targets rejected.');

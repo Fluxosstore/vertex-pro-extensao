@@ -458,24 +458,43 @@ function scoreFile(content: string, ctx: SelectedElementCtx): { score: number; r
 
 // Image selection uses source/alt and known configuration references, never generic classes alone.
 function locateSelectedImage(files: Record<string,string>, ctx: SelectedElementCtx): LocatorResult | null {
-  const sources=[ctx.attributes?.src,ctx.attributes?.currentSrc].filter((v):v is string=>typeof v==='string' && !!v && !v.startsWith('data:') && !v.startsWith('blob:')).map(v=>{try{return new URL(v,'https://selection.invalid').pathname;}catch{return v;}});
+  const raw=[ctx.attributes?.src,ctx.attributes?.currentSrc].filter((v):v is string=>typeof v==='string' && !!v && !v.startsWith('data:') && !v.startsWith('blob:'));
   const alt=ctx.attributes?.alt?.trim();
-  const symbols=new Set<string>();
-  for(const content of Object.values(files))for(const match of content.matchAll(/([A-Za-z_$][\w$]*)\s*:\s*["']([^"']+)["']/g)) {
-    if(sources.includes(match[2]))symbols.add(match[1]);
-  }
-  const matches:LocatorResult[]=[];
-  for(const [path,content] of Object.entries(files)) {
-    if(!/\.(tsx|jsx)$/.test(path))continue;
-    const images=content.match(/<img\b[\s\S]*?\/?>/g)||[];
-    let hits=images.filter(tag=>sources.some(src=>tag.includes(src)) || (alt && (tag.includes('alt="'+alt+'"')||tag.includes("alt='"+alt+"'"))) || [...symbols].some(key=>tag.includes('.'+key)));
-    // A bounded literal list mapped to img is a source location even when src={src}.
-    if(!hits.length)for(const list of content.matchAll(/\[\s*\{[\s\S]{0,6000}?\]\s*\.map\([\s\S]{0,3000}?<img\b[^>]*>/g)) {
-      if(sources.some(src=>list[0].includes(src)) || [...symbols].some(key=>list[0].includes('.'+key)))hits.push(list[0]);
+  // Most specific first: full URL, then path + query string, then path only. The query string matters for
+  // external images such as https://i.pravatar.cc/100?img=11, where the path alone ("/100") is shared by every image.
+  const parse=(v:string)=>{try{return new URL(v,'https://selection.invalid');}catch{return null;}};
+  const external=(u:URL|null)=>!!u && u.origin!=='https://selection.invalid';
+  const levels:string[][]=[
+    raw.map(v=>{const u=parse(v);return external(u)?u!.href:(u?u.pathname+u.search:v);}),
+    raw.map(v=>{const u=parse(v);return u?u.pathname+u.search:v;}),
+    raw.map(v=>{const u=parse(v);return u?u.pathname:v;}),
+  ].map(list=>[...new Set(list.filter(Boolean))]);
+  // A match must end at a boundary so "?img=1" never matches "?img=11".
+  const has=(text:string,src:string)=>{
+    for(let i=text.indexOf(src);i>=0;i=text.indexOf(src,i+1)){if(!/[\w-]/.test(text[i+src.length]??''))return true;}
+    return false;
+  };
+  const run=(sources:string[]):LocatorResult | null=>{
+    if(!sources.length && !alt)return null;
+    const symbols=new Set<string>();
+    for(const content of Object.values(files))for(const match of content.matchAll(/([A-Za-z_$][\w$]*)\s*:\s*["']([^"']+)["']/g)) {
+      if(sources.includes(match[2]))symbols.add(match[1]);
     }
-    if(hits.length===1)matches.push({path,score:20,matchReasons:['imagem identificada por src/alt ou referência de configuração']});
-  }
-  return matches.length===1?matches[0]:null;
+    const matches:LocatorResult[]=[];
+    for(const [path,content] of Object.entries(files)) {
+      if(!/\.(tsx|jsx)$/.test(path))continue;
+      const images=content.match(/<img\b[\s\S]*?\/?>/g)||[];
+      let hits=images.filter(tag=>sources.some(src=>has(tag,src)) || (alt && (tag.includes('alt="'+alt+'"')||tag.includes("alt='"+alt+"'"))) || [...symbols].some(key=>tag.includes('.'+key)));
+      // A bounded literal list mapped to img is a source location even when src={src}.
+      if(!hits.length)for(const list of content.matchAll(/\[\s*\{[\s\S]{0,6000}?\]\s*\.map\([\s\S]{0,3000}?<img\b[^>]*>/g)) {
+        if(sources.some(src=>has(list[0],src)) || [...symbols].some(key=>list[0].includes('.'+key)))hits.push(list[0]);
+      }
+      if(hits.length===1)matches.push({path,score:20,matchReasons:['imagem identificada por src/alt ou referência de configuração']});
+    }
+    return matches.length===1?matches[0]:null;
+  };
+  for(const sources of levels){const found=run(sources);if(found)return found;}
+  return null;
 }
 function locateElement(
   files: Record<string, string>,
