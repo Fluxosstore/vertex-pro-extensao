@@ -152,3 +152,7 @@ Verificado com serviços simulados: três leituras seguidas de conclusão, insis
 ## 3.5.0 — Motor Aurora
 
 Backend github-ai-edit v99 publicado em 07/10/2026. Leia STATUS-3.5.0.md para funcionamento, testes e limitações. O motor fica ativo por padrão na extensão nova; requer validação do commit candidato pelo workflow GitHub Actions antes da aprovação. Skills personalizadas podem ser instaladas por JSON por projeto.
+
+## Provedor Nexa (formato OpenAI)
+
+Secrets: `NEXA_BASE_URL` (ex.: `https://cloudnexapro.site/api/public/v1`), `NEXA_API_KEY`, opcionais `NEXA_MODEL` (padrão `claude-sonnet-5`) e `NEXA_STRONG_MODEL` (padrão `claude-opus-5.5`, usado em pedidos complexos). Com os dois primeiros definidos, o backend usa o provedor Nexa e só cai no DeepSeek se `DEEPSEEK_API_KEY` existir e a chamada falhar.
