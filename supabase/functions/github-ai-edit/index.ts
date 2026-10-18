@@ -838,6 +838,13 @@ Arquivos principais:\n${contents.join("\n\n")}`;
   return { reply: lines.join("\n"), analysis: { commit: commitSha, totals: { files: tree.total, pages: tree.pages.length, components: tree.components.length, hooks: tree.hooks.length } }, suggestions };
 }
 
+// A IA diz que a troca "já foi feita" só quando afirma isso sobre a alteração pedida.
+// Perguntas e pedidos de informação ("me diga qual ícone", "que já está importado") não contam.
+function looksAlreadyApplied(note: string): boolean {
+  if (/\b(?:me\s+diga|informe|especifique|qual|quais|n[ãa]o\s+(?:foi\s+)?informad[oa]|preciso|nada\s+foi\s+alterado)\b/i.test(note)) return false;
+  return /\bj[áa]\s+(?:foi\s+(?:aplicad|alterad|substitu|troc|feit|atualizad)|(?:est[áa]|estava)\s+(?:aplicad|alterad|substitu|troc|feit|atualizad|igual|correto|assim|com\s+(?:o|a)\s+(?:texto|valor|conte[úu]do|cor|[íi]cone|imagem)))/i.test(note);
+}
+
 async function handleCommand(req: Request, execution?: any, parsedBody?: any): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
   if (req.method !== "POST") return json({ ok: false, error: "Método não permitido" }, 405);
@@ -1658,16 +1665,19 @@ Responda em JSON: {"tasks":[{"id":"step-1","status":"prepared","files":["arquivo
       aiNoteFinal = aiNote;
       if (editedFiles.length === 0) {
         if(finalizeOnly){ultimoErro={msg:contextFailure,status:422,code:"READ_CONTEXT_INCOMPLETE"};break;}
-        const jaAplicado = /j[áa]\s+(est[áa]|foi|estava)/i.test(aiNote);
+        const jaAplicado = looksAlreadyApplied(aiNote);
+        const pedeInformacao = !jaAplicado && /\b(?:me\s+diga|informe|especifique|qual|quais|n[ãa]o\s+(?:foi\s+)?informad[oa])\b/i.test(aiNote);
         ultimoErro = {
           msg: jaAplicado
             ? `Parece que essa alteração já tinha sido aplicada antes: ${aiNote}. Se ainda não aparece na prévia da Lovable, tente atualizar/recarregar a prévia por lá.`
+            : pedeInformacao
+            ? `A Aurora precisa de mais um detalhe para continuar: ${aiNote}`
             : aiNote
             ? `A IA não conseguiu aplicar a alteração: ${aiNote}`
             : "A IA não produziu alterações válidas. Tente ser mais específico sobre o que quer mudar.",
           status: 422,
         };
-        tentarOutroArquivo = !jaAplicado;
+        tentarOutroArquivo = !jaAplicado && !pedeInformacao;
         break;
       }
 
