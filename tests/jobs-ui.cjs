@@ -4,7 +4,7 @@ const selected=source.slice(source.indexOf('  const jobStages ='),source.indexOf
 const counter=source.slice(source.indexOf('  function recordAiCommand('),source.indexOf('  function formatHistoryTime('));
 const data={},requests=[],resumes=[],logs=[];let owner='owner-a',project='project-a',failStart=false;
 const storage={set:async d=>Object.assign(data,structuredClone(d)),get:async k=>structuredClone(k===null?data:{[k]:data[k]}),remove:async k=>delete data[k]};
-const ctx={console,Date,crypto:require('node:crypto').webcrypto,AbortController,AbortSignal,setTimeout,clearTimeout,Map,Promise,
+const ctx={IS_PANEL:false,panelIsActive:()=>false,console,Date,crypto:require('node:crypto').webcrypto,AbortController,AbortSignal,setTimeout,clearTimeout,Map,Promise,
  activeProfile:{licenseKey:'private',commandsCount:'10'},usageByLicense:{private:{count:10,day:'2026-10-06',dailyCount:3}},usageReady:Promise.resolve(),DAILY_PROMPT_LIMIT:100,
  usageDay:()=> '2026-10-06',dailyUsage:()=>ctx.usageByLicense.private.dailyCount,logCommand:(...a)=>logs.push(a),renderUsageStats(){},showDailyLimit(){},
  chrome:{storage:{local:storage}},planOwner:async()=>owner,ghAuth:async()=>({licenseKey:'private',deviceId:'device'}),cfgUrl:()=>'',cfgHeaders:()=>({}),
