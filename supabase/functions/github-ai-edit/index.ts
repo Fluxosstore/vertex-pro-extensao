@@ -38,14 +38,13 @@ const OPENROUTER_DEEPSEEK_VISION_MODEL = Deno.env.get("OPENROUTER_DEEPSEEK_VISIO
 const NVIDIA_API_KEY = Deno.env.get("NVIDIA_API_KEY") ?? "";
 const NVIDIA_MODEL = Deno.env.get("NVIDIA_MODEL") || "google/gemma-4-31b-it";
 const OPENROUTER_FREE_MODEL = Deno.env.get("OPENROUTER_FREE_MODEL") || "openrouter/free:free";
-const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY") ?? "";
-const DEEPSEEK_MODEL = Deno.env.get("DEEPSEEK_MODEL") || "deepseek-flash";
 // Provedor próprio (formato OpenAI). Chave e URL ficam só nos Secrets do Supabase.
 const NEXA_BASE_URL = (Deno.env.get("NEXA_BASE_URL") || "").replace(/\/+$/, "");
 const NEXA_API_KEY = Deno.env.get("NEXA_API_KEY") ?? "";
-const NEXA_MODEL = Deno.env.get("NEXA_MODEL") || "claude-sonnet-5";
-const NEXA_STRONG_MODEL = Deno.env.get("NEXA_STRONG_MODEL") || "claude-opus-5.5";
-const NEXA_ENABLED = !!(NEXA_BASE_URL && NEXA_API_KEY);
+// Único provedor de IA: o gateway Nexa. NEXA_MODEL é o nome exato do modelo ativo no painel.
+const NEXA_MODEL = Deno.env.get("NEXA_MODEL") || "";
+const NEXA_STRONG_MODEL = Deno.env.get("NEXA_STRONG_MODEL") || NEXA_MODEL;
+const NEXA_ENABLED = !!(NEXA_BASE_URL && NEXA_API_KEY && NEXA_MODEL);
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -573,7 +572,7 @@ const OPENROUTER_GPT4O_MODEL = Deno.env.get("OPENROUTER_GPT4O_MODEL") || "openai
 const OPENROUTER_GEMINI_MODEL_SLUG = Deno.env.get("OPENROUTER_GEMINI_MODEL_SLUG") || "google/gemini-2.5-flash";
 
 function ensureModelKey(_model: string): string | null {
-  return NEXA_ENABLED || DEEPSEEK_API_KEY ? null : "Nenhum provedor de IA configurado nos Secrets do Supabase (NEXA_BASE_URL/NEXA_API_KEY ou DEEPSEEK_API_KEY)";
+  return NEXA_ENABLED ? null : "Gateway de IA não configurado nos Secrets do Supabase (NEXA_BASE_URL, NEXA_API_KEY e NEXA_MODEL)";
 }
 
 async function callOpenRouterModelo(modelSlug: string, system: string, user: string, jsonMode: boolean, images?: string[]) {
@@ -717,34 +716,6 @@ async function callOpenRouterFree(system: string, user: string, jsonMode: boolea
   return stripJsonFences(text);
 }
 
-async function callDeepSeekDirect(system: string, user: string, jsonMode: boolean, images?: string[], maxTokens = 8000, deadline = Infinity, onUsage?: (usage: any) => void) {
-  const remaining = deadline - Date.now();
-  if (remaining < 2000) throw new Error("Tempo de processamento excedido. Envie um pedido mais específico e tente novamente.");
-  const prompt = jsonMode ? `${user}\n\nResponda APENAS com JSON puro.` : user;
-  const content = images?.length
-    ? [{ type: "text", text: prompt }, ...images.map((url) => ({ type: "image_url", image_url: { url } }))]
-    : prompt;
-  const res = await fetch("https://api.deepseek.com/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${DEEPSEEK_API_KEY}` },
-    body: JSON.stringify({
-      model: DEEPSEEK_MODEL,
-      messages: [{ role: "system", content: system }, { role: "user", content }],
-      max_tokens: maxTokens,
-      thinking: { type: "disabled" },
-      ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
-    }),
-    signal: AbortSignal.timeout(Math.min(images?.length ? 60_000 : 50_000, remaining)),
-  });
-  const data = await res.json().catch(() => ({}));
-  onUsage?.(data?.usage);
-  if (!res.ok) throw new Error(data?.error?.message || `DeepSeek HTTP ${res.status}`);
-  if (data?.choices?.[0]?.finish_reason === "length") throw new Error("A resposta da DeepSeek foi interrompida por limite de tokens.");
-  const answer = data?.choices?.[0]?.message?.content || "";
-  if (!answer) throw new Error("A DeepSeek retornou uma resposta vazia.");
-  return stripJsonFences(answer);
-}
-
 async function callNexa(system: string, user: string, jsonMode: boolean, images: string[] | undefined, strong: boolean, maxTokens: number, deadline: number, onUsage?: (usage: any) => void) {
   const remaining = deadline - Date.now();
   if (remaining < 2000) throw new Error("Tempo de processamento excedido. Envie um pedido mais específico e tente novamente.");
@@ -772,14 +743,7 @@ async function callNexa(system: string, user: string, jsonMode: boolean, images:
 }
 
 async function callAI(_model: string, system: string, user: string, jsonMode: boolean, images?: string[], preferirModeloForte?: boolean, maxTokens = 8000, deadline = Infinity, onUsage?: (usage: any) => void) {
-  if (NEXA_ENABLED) {
-    try { return await callNexa(system, user, jsonMode, images, !!preferirModeloForte, maxTokens, deadline, onUsage); }
-    catch (e) {
-      console.log(`[callNexa] falhou: ${e instanceof Error ? e.message : String(e)}`);
-      if (!DEEPSEEK_API_KEY) throw e; // sem reserva configurada
-    }
-  }
-  return await callDeepSeekDirect(system, user, jsonMode, images, maxTokens, deadline, onUsage);
+  return await callNexa(system, user, jsonMode, images, !!preferirModeloForte, maxTokens, deadline, onUsage);
 }
 
 async function handleCommand(req: Request, execution?: any, parsedBody?: any): Promise<Response> {

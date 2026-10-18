@@ -153,6 +153,6 @@ Verificado com serviços simulados: três leituras seguidas de conclusão, insis
 
 Backend github-ai-edit v99 publicado em 07/10/2026. Leia STATUS-3.5.0.md para funcionamento, testes e limitações. O motor fica ativo por padrão na extensão nova; requer validação do commit candidato pelo workflow GitHub Actions antes da aprovação. Skills personalizadas podem ser instaladas por JSON por projeto.
 
-## Provedor Nexa (formato OpenAI)
+## Provedor Nexa (único provedor de IA)
 
-Secrets: `NEXA_BASE_URL` (ex.: `https://cloudnexapro.site/api/public/v1`), `NEXA_API_KEY`, opcionais `NEXA_MODEL` (padrão `claude-sonnet-5`) e `NEXA_STRONG_MODEL` (padrão `claude-opus-5.5`, usado em pedidos complexos). Com os dois primeiros definidos, o backend usa o provedor Nexa e só cai no DeepSeek se `DEEPSEEK_API_KEY` existir e a chamada falhar.
+O backend não chama mais `api.deepseek.com`. Toda IA passa pelo gateway Nexa (formato OpenAI). Secrets obrigatórios: `NEXA_BASE_URL` (ex.: `https://cloudnexapro.site/api/public/v1`), `NEXA_API_KEY` e `NEXA_MODEL` (nome exato de um modelo ativo no painel; use o DeepSeek do gateway). Opcional: `NEXA_STRONG_MODEL` para pedidos complexos (padrão = `NEXA_MODEL`). `DEEPSEEK_API_KEY` pode ser removido dos Secrets.
