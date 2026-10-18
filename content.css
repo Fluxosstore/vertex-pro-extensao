@@ -2114,3 +2114,8 @@
 #next-widget-root .next-dock-msg .vtx-after{ display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; }
 #next-widget-root .next-dock-msg .vtx-after a{ font-weight: 600; }
 #next-widget-root .next-dock-msg .vtx-after .next-undo-open{ padding: 3px 10px; font-size: 12px; border-radius: 999px; }
+
+/* 3.5.16 — relatório de análise do projeto */
+#next-widget-root .next-dock-msg.ai.analise{ max-width: 100%; }
+#next-widget-root .next-dock-msg .vtx-analysis{ line-height: 1.55; font-size: 13px; }
+#next-widget-root .next-dock-msg .vtx-suggest{ text-align: left; }

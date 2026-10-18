@@ -746,6 +746,98 @@ async function callAI(_model: string, system: string, user: string, jsonMode: bo
   return await callNexa(system, user, jsonMode, images, !!preferirModeloForte, maxTokens, deadline, onUsage);
 }
 
+// ── Análise completa do repositório (modo "Lovable": entender antes de editar) ──
+const ANALYSIS_REQUEST = /\b(?:analis(?:e|ar|a)|an[aá]lise|audit(?:e|ar|oria)|diagn[oó]stic(?:o|ar)|revis(?:e|ar)\s+(?:o\s+|todo\s+|meu\s+|este\s+)?(?:projeto|site|reposit[oó]rio|c[oó]digo)|entend(?:a|er)\s+(?:o\s+)?(?:projeto|site|reposit[oó]rio)|vis[aã]o\s+geral|mapeie|mapear)\b/i;
+const ANALYSIS_SCOPE = /\b(?:projeto|site|reposit[oó]rio|c[oó]digo|p[aá]ginas?|estrutura|app|aplica[cç][aã]o)\b/i;
+function isAnalysisRequest(prompt: string): boolean {
+  return prompt.length <= 600 && ANALYSIS_REQUEST.test(prompt) && ANALYSIS_SCOPE.test(prompt);
+}
+const KEY_FILE_PATTERNS = [
+  /^package\.json$/, /^index\.html$/, /^vite\.config\.[tj]s$/, /^tailwind\.config\.[tj]s$/,
+  /^src\/(?:main|App|index)\.[tj]sx?$/, /^src\/router\.[tj]sx?$/, /^src\/routes\/(?:__root|index)\.[tj]sx?$/,
+  /^src\/index\.css$/, /^src\/styles?\.css$/, /^README\.md$/i,
+];
+function summarizeTree(paths: string[]) {
+  const by = (re: RegExp) => paths.filter((p) => re.test(p));
+  const pages = by(/^src\/(?:pages|routes|app)\/.+\.(?:tsx|jsx|ts|js)$/);
+  const components = by(/^src\/components\/.+\.(?:tsx|jsx)$/);
+  const hooks = by(/^src\/hooks\/.+\.(?:ts|tsx|js)$/);
+  const lib = by(/^src\/(?:lib|utils|services|integrations)\/.+\.(?:ts|tsx|js)$/);
+  const styles = by(/\.(?:css|scss)$/);
+  const assets = by(/\.(?:png|jpe?g|webp|gif|avif|svg|ico)$/i);
+  const tests = by(/\.(?:test|spec)\.[tj]sx?$/);
+  return { total: paths.length, pages, components, hooks, lib, styles, assets, tests };
+}
+async function analyzeProject(args: {
+  token: string; repo: string; branch: string; commitSha: string; allPaths: string[]; candidatePaths: string[];
+  supabase: any; prompt: string; deadline: number; askAI: Function; model: string; historyBlock: string; preferencesBlock: string;
+}) {
+  const { token, repo, commitSha, allPaths, candidatePaths, supabase, prompt, deadline, askAI, model } = args;
+  const tree = summarizeTree(allPaths);
+  const mapa = await getOrBuildProjectMap(supabase, token, repo, commitSha, commitSha, candidatePaths);
+  const keyPaths = allPaths.filter((p) => KEY_FILE_PATTERNS.some((re) => re.test(p))).slice(0, 10);
+  const pagePaths = tree.pages.slice(0, 8);
+  const readPaths = [...new Set([...keyPaths, ...pagePaths])];
+  const contents: string[] = [];
+  let budget = 90_000;
+  await Promise.all(readPaths.map(async (path) => {
+    try {
+      const r = await githubFetch(token, `https://api.github.com/repos/${repo}/contents/${encodeURIComponent(path).replace(/%2F/g, "/")}?ref=${commitSha}`,
+        { signal: AbortSignal.timeout(8000) });
+      if (!r.ok) return;
+      const d = await r.json();
+      const text = decodeBase64Utf8((d.content || "").replace(/\n/g, "")).slice(0, 9000);
+      if (budget - text.length < 0) return;
+      budget -= text.length;
+      contents.push(`### ${path}\n${text}`);
+    } catch (_e) { /* arquivo opcional */ }
+  }));
+  let deps = "";
+  const pkg = contents.find((c) => c.startsWith("### package.json"));
+  if (pkg) {
+    try {
+      const j = JSON.parse(pkg.slice(pkg.indexOf("\n") + 1));
+      deps = `scripts: ${Object.keys(j.scripts || {}).join(", ")}\ndependências: ${Object.keys(j.dependencies || {}).slice(0, 40).join(", ")}\ndevDependencies: ${Object.keys(j.devDependencies || {}).slice(0, 25).join(", ")}`;
+    } catch (_e) { /* package.json inválido entra no relatório pela IA */ }
+  }
+  const mapaTexto = formatarMapaParaPrompt(mapa, candidatePaths).split("\n").slice(0, 220).join("\n");
+  const system = `Você é a Aurora, construtora e editora de sites dentro do Vertex Pro (como a Lovable). Faça uma ANÁLISE COMPLETA do repositório abaixo, só com base no que foi fornecido; nunca invente arquivos ou comportamentos. Escreva em português claro para quem constrói sites. Responda em JSON puro:
+{"resumo":"2-3 frases sobre o que o projeto é e faz",
+ "stack":["tecnologias detectadas"],
+ "paginas":[{"caminho":"arquivo ou rota","descricao":"o que a página mostra"}],
+ "estrutura":"como o código está organizado, em 2-4 frases",
+ "pontos_fortes":["até 4 itens"],
+ "problemas":[{"gravidade":"alta|media|baixa","descricao":"problema concreto","arquivo":"caminho se souber"}],
+ "melhorias":[{"titulo":"curto","comando":"pedido pronto para o cliente enviar à Aurora para aplicar"}]}
+Regras: no máximo 8 páginas, 6 problemas e 5 melhorias; cada melhoria deve ser uma edição pequena e segura; se algo não pôde ser verificado, diga em "estrutura".`;
+  const user = `Pedido do cliente: ${prompt}${args.historyBlock}${args.preferencesBlock}
+
+Repositório: ${repo} (commit ${commitSha.slice(0, 7)})
+Totais: ${tree.total} arquivos; páginas/rotas: ${tree.pages.length}; componentes: ${tree.components.length}; hooks: ${tree.hooks.length}; lib/serviços: ${tree.lib.length}; estilos: ${tree.styles.length}; imagens: ${tree.assets.length}; testes: ${tree.tests.length}
+${deps}
+
+Páginas/rotas encontradas:\n${tree.pages.join("\n") || "(nenhuma pasta de páginas reconhecida)"}
+
+Mapa de arquivos (exporta/usa):\n${mapaTexto}
+
+Arquivos principais:\n${contents.join("\n\n")}`;
+  const raw = await askAI(model, system, user, true, undefined, true, 4000, deadline);
+  let a: any;
+  try { a = JSON.parse(raw); } catch (_e) { throw new Error("A análise voltou em formato inválido. Tente novamente."); }
+  const list = (v: any, n: number) => (Array.isArray(v) ? v.slice(0, n) : []);
+  const sev: Record<string, string> = { alta: "🔴", media: "🟠", baixa: "🟡" };
+  const lines: string[] = [`**Análise do projeto** · ${repo.split("/").pop()}`, "", String(a.resumo || "").trim()];
+  if (list(a.stack, 12).length) lines.push("", `**Tecnologias:** ${list(a.stack, 12).join(", ")}`);
+  lines.push("", `**Números:** ${tree.total} arquivos · ${tree.pages.length} páginas/rotas · ${tree.components.length} componentes · ${tree.hooks.length} hooks`);
+  if (list(a.paginas, 8).length) lines.push("", "**Páginas**", ...list(a.paginas, 8).map((p: any) => `• ${p.caminho} — ${p.descricao}`));
+  if (a.estrutura) lines.push("", "**Estrutura**", String(a.estrutura).trim());
+  if (list(a.pontos_fortes, 4).length) lines.push("", "**Pontos fortes**", ...list(a.pontos_fortes, 4).map((x: any) => `• ${x}`));
+  if (list(a.problemas, 6).length) lines.push("", "**Pontos de atenção**", ...list(a.problemas, 6).map((x: any) => `${sev[x.gravidade] || "🟡"} ${x.descricao}${x.arquivo ? ` (${x.arquivo})` : ""}`));
+  const suggestions = list(a.melhorias, 5).filter((m: any) => m && m.titulo && m.comando)
+    .map((m: any) => ({ title: String(m.titulo).slice(0, 80), prompt: String(m.comando).slice(0, 400) }));
+  return { reply: lines.join("\n"), analysis: { commit: commitSha, totals: { files: tree.total, pages: tree.pages.length, components: tree.components.length, hooks: tree.hooks.length } }, suggestions };
+}
+
 async function handleCommand(req: Request, execution?: any, parsedBody?: any): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
   if (req.method !== "POST") return json({ ok: false, error: "Método não permitido" }, 405);
@@ -870,7 +962,8 @@ async function handleCommand(req: Request, execution?: any, parsedBody?: any): P
     if (pedidoComplexo) console.log(`[complexidade] pedido classificado como estrutural, pulando pro modelo mais forte`);
 
     const explicitEdit = /^(?:por favor[, ]*)?(?:troqu(?:e|ar)|substitu(?:a|ir)|cri(?:e|a|ar)|faça|faz|mude|mudar|alter(?:e|ar)|adicion(?:e|ar)|coloq(?:ue|ar)|corrij(?:a|ir)|remov(?:a|er)|retir(?:e|ar)|implement(?:e|ar)|atualiz(?:e|ar))\b/i.test(prompt);
-    if (dockedMode && !planAction && !undoAction && !explicitEdit) {
+    const analysisRequested = !planAction && !undoAction && !explicitEdit && isAnalysisRequest(prompt);
+    if (dockedMode && !planAction && !undoAction && !explicitEdit && !analysisRequested) {
       const classifySystem = `Você é a Aurora, a assistente de IA do Vertex Pro — uma extensão que ajuda pessoas a editar seus projetos na Lovable. Você está conversando no painel ancorado (modo chat).
 
 Sua primeira tarefa é decidir a intenção da mensagem do usuário:
@@ -1057,6 +1150,16 @@ Responda em JSON: {"intent": "conversa" ou "edicao", "resposta": "sua resposta e
     const candidatePaths = [...new Set([...mentionedPaths, ...allPaths.filter(isCandidatePath)])].slice(0, MAX_CANDIDATE_PATHS);
     if (candidatePaths.length === 0) {
       return json({ ok: false, error: "Repositório vazio ou sem arquivos editáveis reconhecidos." }, 422);
+    }
+    if (analysisRequested) {
+      await report("reading_files");
+      try {
+        const out = await analyzeProject({ token, repo, branch, commitSha: baseCommitSha, allPaths, candidatePaths, supabase, prompt,
+          deadline: requestDeadline, askAI, model, historyBlock, preferencesBlock });
+        return json({ ok: true, mode: "chat", ...out });
+      } catch (e) {
+        return json({ ok: false, error: e instanceof Error ? e.message : "Não consegui analisar o projeto agora." }, 502);
+      }
     }
 
     let chosenPaths: string[] = [];

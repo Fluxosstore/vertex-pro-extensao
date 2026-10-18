@@ -8,6 +8,7 @@ const source = ['aurora-engine.ts','agent-jobs.ts','validation-workflow.ts','pla
 async function scenario(mode = 'complete', requireValidation = false, execution = undefined) {
   const files = { 'src/a.js': 'const title = "old";', 'src/b.js': 'const enabled = false;' };
   if(mode==='engine-discover')files['src/account/service.js']='const session = true;';
+  if(mode==='analyze'){files['package.json']='{"scripts":{"build":"vite build"},"dependencies":{"react":"^18"}}';files['src/pages/Home.tsx']='export default function Home(){return null}';}
   const limited=['budget-finish','budget-stop','budget-partial','duplicate-reads','reselect-cache'].includes(mode);
   if(limited){for(const name of ['aa','ab','ac','ad'])files['src/'+name+'.js']='const placeholder=0;';for(let i=0;i<4;i++)files['src/extra/x'+i+'.js']='const extra'+i+'=0;';}
   const calls = [];
@@ -32,6 +33,7 @@ async function scenario(mode = 'complete', requireValidation = false, execution 
       calls.push({url,opts}); let result;
       if(url.includes('/chat/completions')) {
         const request=JSON.parse(opts.body), system=request.messages[0].content, user=request.messages[1].content;
+        if(system.includes('ANÁLISE COMPLETA')){assert(user.includes('package.json'));assert(user.includes('src/pages/Home.tsx'));return Response.json({usage:{prompt_tokens:10,completion_tokens:5},choices:[{finish_reason:'stop',message:{content:JSON.stringify({resumo:'Site de teste.',stack:['React'],paginas:[{caminho:'src/pages/Home.tsx',descricao:'Início'}],estrutura:'Simples.',pontos_fortes:['Pequeno'],problemas:[{gravidade:'alta',descricao:'Sem testes',arquivo:'src/a.js'}],melhorias:[{titulo:'Adicionar teste',comando:'Adicione um teste para a Home'}]})}}]});}
         if(system.includes('REVISOR INDEPENDENTE')) {
           reviewRound++;const review=JSON.parse(user.split("\n\nResponda APENAS")[0]);assert(review.files.some(f=>f.path==='src/a.js'&&f.before.includes('old')));
           result=mode==='engine-invalid'?{verdict:'pass',findings:'wrong'}:
@@ -85,7 +87,7 @@ async function scenario(mode = 'complete', requireValidation = false, execution 
   };
   vm.runInNewContext(source,ctx);
   const invoke=async body=>{const r=await handler(new Request('https://test.invalid',{method:'POST',body:JSON.stringify({licenseKey:'test',deviceId:'test',...body})}));return {status:r.status,data:await r.json()}};
-  const initial={prompt:'Corrija a opção e crie um painel com o novo título.',deferCommit:!execution,requireValidation,auroraEngine:mode.startsWith('engine-')};
+  const initial={prompt:mode==='analyze'?'Analise o projeto completo':'Corrija a opção e crie um painel com o novo título.',dockedMode:mode==='analyze',deferCommit:!execution,requireValidation,auroraEngine:mode.startsWith('engine-')};
   if(mode==='image-unknown')initial.selectedElement={tag:'img',classes:'w-full object-cover'};
   const response=execution ? await (async()=>{const r=await ctx.handleCommand(new Request('https://test.invalid',{method:'POST'}),execution,{licenseKey:'test',deviceId:'test',...initial});return{status:r.status,data:await r.json()}})() : await invoke(initial);
   return {...response,reviewRound,setPublication:p=>jobPublication=p,setJobStatus:s=>jobStatus=s,calls,selectorCount,editRound,get quota(){return quota},invoke};
@@ -115,5 +117,6 @@ async function scenario(mode = 'complete', requireValidation = false, execution 
     if(mode==='engine-invalid'){assert(r.data.requires_manual_review);assert.equal(r.data.engine.review.status,'incomplete');}
     else {assert.equal(r.data.engine.review.status,'passed');if(mode==='engine-repair'){assert.equal(r.reviewRound,2);assert(r.data.files.find(f=>f.path==='src/a.js').content.includes('fixed'));assert(r.data.engine.events.some(e=>e.stage==='repairing'));}}
   }
+  r=await scenario('analyze');assert.equal(r.status,200,JSON.stringify(r.data));assert.equal(r.data.mode,'chat');assert(r.data.reply.includes('Análise do projeto'));assert(r.data.reply.includes('src/pages/Home.tsx'));assert.equal(r.data.suggestions.length,1);assert.equal(r.data.analysis.totals.pages,1);assert.equal(r.quota,1);assert(!r.calls.some(c=>c.url.includes('github.com')&&c.opts.method==='POST'));assert.equal(r.editRound,0);
   console.log('PASS: additional read/promotion, pinned snapshot, two staged steps, new component, one quota charge, no commit before approval, mandatory review of partial result, blocked forbidden reads.');
 })().catch(e=>{console.error(e);process.exit(1)});

@@ -1186,6 +1186,13 @@
     if (target.closest('.vtx-think-cancel')) { if (activeEdit) cancelActiveEdit(); return; }
     const row = target.closest('.vtx-step-row');
     if (row) { row.parentElement.classList.toggle('open'); return; }
+    const suggest = target.closest('.vtx-suggest');
+    if (suggest) {
+      const picks = suggest.closest('.next-dock-msg')?._suggestions;
+      const pick = picks?.[Number(suggest.dataset.suggest)];
+      if (pick && ghPrompt) { ghPrompt.value = pick.prompt; ghPrompt.dispatchEvent(new Event('input', { bubbles: true })); ghPrompt.focus(); }
+      return;
+    }
     const chip = target.closest('.vtx-chip[data-panel]');
     if (chip) {
       const message = chip.closest('.next-dock-msg');
@@ -3051,7 +3058,7 @@
     }
     try {
       const {job}=await jobRequest(ticket,'job_diagnostic');
-      const report=['Vertex Pro 3.5.15',`Comando: ${job.id}`,`Projeto: ${job.repo}`,`Estado: ${job.status}`,`Etapa: ${job.stage}`,`Commit: ${job.commit_sha || 'não registrado'}`,`Link: ${job.commit_url || '-'}`,`Início: ${job.created_at}`,`Atualização: ${job.updated_at}`,`Código: ${job.error_code || '-'}`,`Erro: ${job.error_message || '-'}`,
+      const report=['Vertex Pro 3.5.16',`Comando: ${job.id}`,`Projeto: ${job.repo}`,`Estado: ${job.status}`,`Etapa: ${job.stage}`,`Commit: ${job.commit_sha || 'não registrado'}`,`Link: ${job.commit_url || '-'}`,`Início: ${job.created_at}`,`Atualização: ${job.updated_at}`,`Código: ${job.error_code || '-'}`,`Erro: ${job.error_message || '-'}`,
         ...(job.events || []).map(x=>`${x.at}: ${x.stage}`)].join('\n');
       try {await navigator.clipboard.writeText(report);} catch(_) {
         const input=document.createElement('textarea');input.value=report;input.style.cssText='position:fixed;left:-9999px;top:0';document.body.appendChild(input);input.select();
@@ -3157,8 +3164,18 @@
       if (data.mode === 'chat') {
         if(op.jobTicket)op.jobTicket.settled=true;
         const reply = data.reply || 'Oi! Como posso ajudar?';
-        addDockChatMessage('ai', escapeHtml(reply));
-        await saveSuccessfulTurn(op.memoryScope,prompt,reply).catch(()=>{});
+        if (data.analysis) {
+          // Relatório de análise: **negrito** e quebras de linha, mais atalhos de melhoria.
+          const html = escapeHtml(reply).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+          const bubble = addDockChatMessage('ai', `<div class="vtx-lead vtx-analysis">${html}</div>`, 'analise');
+          const picks = Array.isArray(data.suggestions) ? data.suggestions.slice(0, 5) : [];
+          if (bubble && picks.length) {
+            const row = actionsRow(bubble);
+            picks.forEach((sug, i) => row.insertAdjacentHTML('beforeend', `<button type="button" class="vtx-chip vtx-suggest" data-suggest="${i}">${escapeHtml(sug.title)}</button>`));
+            bubble._suggestions = picks;
+          }
+        } else addDockChatMessage('ai', escapeHtml(reply));
+        await saveSuccessfulTurn(op.memoryScope,prompt,String(reply).slice(0,500)).catch(()=>{});
         ghAnexos = [];
         renderAnexos();
         ghPrompt.value = '';
