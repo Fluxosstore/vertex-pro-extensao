@@ -417,15 +417,15 @@
           </button>
           <div class="next-popover" id="nextEnginePopover" style="display:none;">
             <div class="next-popover-label">Modelo de IA</div>
-            <button class="next-popover-item" data-engine="gpt-5" data-engine-label="GPT-5 · DeepSeek">
+            <button class="next-popover-item" data-engine="gpt-5" data-engine-label="GPT-5">
               <span class="next-engine-dot" style="background:#10a37f;"></span>
               <span>GPT-5</span>
             </button>
-            <button class="next-popover-item" data-engine="opus-5" data-engine-label="Opus 5 · DeepSeek">
+            <button class="next-popover-item" data-engine="opus-5" data-engine-label="Opus 5">
               <span class="next-engine-dot" style="background:#d97757;"></span>
               <span>Opus 5</span>
             </button>
-            <button class="next-popover-item" data-engine="gemini" data-engine-label="Gemini · DeepSeek">
+            <button class="next-popover-item" data-engine="gemini" data-engine-label="Gemini">
               <span class="next-engine-dot" style="background:#4285f4;"></span>
               <span>Gemini</span>
             </button>
@@ -1906,7 +1906,7 @@
   setupPopover(root.querySelector('#nextModelsBtn'), root.querySelector('#nextModelsPopover'));
   setupPopover(root.querySelector('#nextEngineBtn'), root.querySelector('#nextEnginePopover'));
 
-  // Opções visuais preservadas; as Edge Functions usam DeepSeek para todas.
+  // O nome mostrado é sempre o do modelo escolhido; o backend roteia pelo gateway.
   let selectedEngine = 'deepseek-flash';
   const engineLabel = root.querySelector('#nextEngineLabel');
   const engineDot = root.querySelector('#nextEngineDot');
@@ -3051,7 +3051,7 @@
     }
     try {
       const {job}=await jobRequest(ticket,'job_diagnostic');
-      const report=['Vertex Pro 3.5.14',`Comando: ${job.id}`,`Projeto: ${job.repo}`,`Estado: ${job.status}`,`Etapa: ${job.stage}`,`Commit: ${job.commit_sha || 'não registrado'}`,`Link: ${job.commit_url || '-'}`,`Início: ${job.created_at}`,`Atualização: ${job.updated_at}`,`Código: ${job.error_code || '-'}`,`Erro: ${job.error_message || '-'}`,
+      const report=['Vertex Pro 3.5.15',`Comando: ${job.id}`,`Projeto: ${job.repo}`,`Estado: ${job.status}`,`Etapa: ${job.stage}`,`Commit: ${job.commit_sha || 'não registrado'}`,`Link: ${job.commit_url || '-'}`,`Início: ${job.created_at}`,`Atualização: ${job.updated_at}`,`Código: ${job.error_code || '-'}`,`Erro: ${job.error_message || '-'}`,
         ...(job.events || []).map(x=>`${x.at}: ${x.stage}`)].join('\n');
       try {await navigator.clipboard.writeText(report);} catch(_) {
         const input=document.createElement('textarea');input.value=report;input.style.cssText='position:fixed;left:-9999px;top:0';document.body.appendChild(input);input.select();

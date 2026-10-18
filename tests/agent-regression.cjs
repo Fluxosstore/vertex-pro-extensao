@@ -30,7 +30,7 @@ async function scenario(mode = 'complete', requireValidation = false, execution 
     Deno:{env:{get:()=> 'test-only'},serve:fn=>handler=fn},
     fetch:async(url,opts={})=>{
       calls.push({url,opts}); let result;
-      if(url.includes('api.deepseek.com')) {
+      if(url.includes('/chat/completions')) {
         const request=JSON.parse(opts.body), system=request.messages[0].content, user=request.messages[1].content;
         if(system.includes('REVISOR INDEPENDENTE')) {
           reviewRound++;const review=JSON.parse(user.split("\n\nResponda APENAS")[0]);assert(review.files.some(f=>f.path==='src/a.js'&&f.before.includes('old')));
@@ -111,7 +111,7 @@ async function scenario(mode = 'complete', requireValidation = false, execution 
     if(mode==='engine-blocked'){assert.equal(r.status,422);assert.equal(r.reviewRound,2);assert.equal(r.data.engine.review.status,'blocked');continue;}
     assert.equal(r.status,200,JSON.stringify(r.data));assert.equal(r.data.requires_validation,false,'Engine must not force CI');
     if(mode==='engine-discover'){assert.equal(r.reviewRound,2);assert.equal(r.calls.filter(c=>c.url.includes('/contents/src/account/service.js')).length,1);}
-    assert.equal(r.data.engine.usage.requests,r.calls.filter(c=>c.url.includes('api.deepseek.com')).length);assert(r.data.engine.usage.complete);
+    assert.equal(r.data.engine.usage.requests,r.calls.filter(c=>c.url.includes('/chat/completions')).length);assert(r.data.engine.usage.complete);
     if(mode==='engine-invalid'){assert(r.data.requires_manual_review);assert.equal(r.data.engine.review.status,'incomplete');}
     else {assert.equal(r.data.engine.review.status,'passed');if(mode==='engine-repair'){assert.equal(r.reviewRound,2);assert(r.data.files.find(f=>f.path==='src/a.js').content.includes('fixed'));assert(r.data.engine.events.some(e=>e.stage==='repairing'));}}
   }
