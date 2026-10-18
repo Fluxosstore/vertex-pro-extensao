@@ -1,0 +1,19 @@
+html, body { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; background: #fff; }
+@media (prefers-color-scheme: dark) { html, body { background: #14101f; } }
+
+/* Dentro do painel nativo o app ocupa a área inteira; o Chrome já oferece o
+   cabeçalho e o X de fechar. */
+#next-widget-root.vtx-in-panel #nextLauncher,
+#next-widget-root.vtx-in-panel [data-action="close"],
+#next-widget-root.vtx-in-panel #nextDockToggleBtn { display: none !important; }
+#next-widget-root.vtx-in-panel .next-app,
+#next-widget-root.vtx-in-panel .next-app.docked {
+  position: fixed !important;
+  top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+  width: 100% !important; height: 100% !important; max-width: none !important;
+  border-radius: 0 !important; box-shadow: none !important;
+}
+#next-widget-root.vtx-in-panel .next-dock-chat { min-height: 0; }
+
+/* Painel dentro da página: some enquanto o painel nativo da aba está aberto. */
+#next-widget-root.vtx-panel-active { display: none !important; }

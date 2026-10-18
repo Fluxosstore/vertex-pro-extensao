@@ -2119,3 +2119,6 @@
 #next-widget-root .next-dock-msg.ai.analise{ max-width: 100%; }
 #next-widget-root .next-dock-msg .vtx-analysis{ line-height: 1.55; font-size: 13px; }
 #next-widget-root .next-dock-msg .vtx-suggest{ text-align: left; }
+
+/* Painel nativo aberto nesta aba: esconde o widget da página. */
+#next-widget-root.vtx-panel-active{ display: none !important; }

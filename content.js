@@ -1,6 +1,15 @@
 (function () {
   if (document.getElementById('next-widget-root')) return; // evita duplicar
 
+  // Dois modos de execução: dentro da página da Lovable (content script) ou no
+  // painel lateral nativo do Chrome (sidepanel.html). No painel, tudo que
+  // depende da página (URL, repositório, seleção, chat da Lovable) passa
+  // pelo agente que roda na aba: VTX_PAGE.state espelha a página e
+  // VTX_PAGE.call executa funções nela.
+  const IS_PANEL = globalThis.__VTX_SIDEPANEL__ === true && !!globalThis.VTX_PAGE;
+  const PG = IS_PANEL ? globalThis.VTX_PAGE.state : location;
+  const callPage = (fn, ...args) => globalThis.VTX_PAGE.call(fn, ...args);
+
   // Garante que a Space Grotesk carregue mesmo se o @import do CSS
   // for bloqueado por alguma política da página. Injetar o <link> no
   // <head> é o caminho mais compatível.
@@ -629,7 +638,7 @@
       app.style.left = 'auto'; app.style.top = 'auto';
       app.style.bottom = 'auto'; app.style.right = 'auto';
       // empurra a página de verdade (tela dividida) em vez de só sobrepor
-      document.documentElement.style.marginRight = `${DOCK_WIDTH}px`;
+      if (!IS_PANEL) document.documentElement.style.marginRight = `${DOCK_WIDTH}px`;
     } else {
       app.style.left = 'auto'; app.style.top = 'auto';
       app.style.bottom = '92px'; app.style.right = '24px';
@@ -2018,7 +2027,7 @@
   }
 
   function getProjectContextKey() {
-    return getLovableProjectId() || `${location.pathname}${location.search}`;
+    return getLovableProjectId() || `${PG.pathname}${PG.search}`;
   }
 
   function checkProjectChange() {
@@ -2319,7 +2328,7 @@
   // adivinhar pelo nome do projeto.
 
   function getLovableProjectId() {
-    const m = location.pathname.match(/\/projects\/([0-9a-f-]{36})/i);
+    const m = PG.pathname.match(/\/projects\/([0-9a-f-]{36})/i);
     return m ? m[1] : null;
   }
 
@@ -2409,6 +2418,10 @@
   }
 
   async function findCurrentProjectRepo(repos) {
+    if (IS_PANEL) return callPage('findCurrentProjectRepo', repos);
+    return findCurrentProjectRepoLocal(repos);
+  }
+  async function findCurrentProjectRepoLocal(repos) {
     let detected = detectRepoFromLovable();
     if (!detected) {
       const pid = getLovableProjectId();
@@ -2654,6 +2667,10 @@
     }) || null;
   }
 
+  // No painel nativo a prévia está na aba, não aqui: o agente da página manda a mensagem.
+  async function postFrame(type) {
+    return IS_PANEL ? !!(await callPage('postToFrame', type).catch(() => false)) : postToFrame(type);
+  }
   function postToFrame(type) {
     const frame = findPreviewIframe();
     if (!frame || !frame.contentWindow) return false;
@@ -2667,8 +2684,7 @@
   // (acontece quando o iframe já estava carregado antes da extensão).
   async function ensureFrameScript() {
     try {
-      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-      const tabId = tabs[0]?.id;
+      const tabId = IS_PANEL ? globalThis.VTX_PAGE.tabId() : (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
       if (!tabId) return;
       const check = await chrome.scripting.executeScript({
         target: { tabId, allFrames: true },
@@ -2723,8 +2739,8 @@
 
     await ensureFrameScript();
     // manda algumas vezes: o script pode ainda estar subindo
-    const ping = () => postToFrame(MSG_START);
-    if (!ping()) {
+    const ping = () => postFrame(MSG_START);
+    if (!(await ping())) {
       ghShowMsg('Prévia não encontrada. Abra um projeto com a prévia visível.', true);
       selState = 'idle';
       setPickActive(false);
@@ -2735,7 +2751,7 @@
   }
 
   function stopSelection() {
-    postToFrame(MSG_CANCEL);
+    postFrame(MSG_CANCEL);
     if (selState === 'selecting') selState = selContext ? 'selected' : 'idle';
     setPickActive(false);
     ghShowMsg('');
@@ -2747,28 +2763,39 @@
     if (e.key === 'Escape' && selState === 'selecting') stopSelection();
   });
 
-  window.addEventListener('message', (e) => {
+  function handleFrameMessage(origin, data) {
     // só aceita mensagens vindas da prévia
-    const fromPreview = e.origin.endsWith('.lovable.app')
-                     || e.origin.endsWith('.lovableproject.com');
+    const fromPreview = String(origin).endsWith('.lovable.app')
+                     || String(origin).endsWith('.lovableproject.com');
     if (!fromPreview) return;
-    if (!e.data || typeof e.data.type !== 'string') return;
+    if (!data || typeof data.type !== 'string') return;
 
-    if (e.data.type === MSG_READY && selState === 'selecting') {
-      postToFrame(MSG_START);
+    if (data.type === MSG_READY && selState === 'selecting') {
+      postFrame(MSG_START);
     }
-    if (e.data.type === MSG_SELECTED) {
-      selContext = e.data.context || null;
+    if (data.type === MSG_SELECTED) {
+      selContext = data.context || null;
       selState = selContext ? 'selected' : 'idle';
       setPickActive(false);
       ghShowMsg('');
       renderSelChip();
     }
-    if (e.data.type === MSG_CANCEL && selState === 'selecting') {
+    if (data.type === MSG_CANCEL && selState === 'selecting') {
       selState = selContext ? 'selected' : 'idle';
       setPickActive(false);
       ghShowMsg('');
     }
+  }
+  if (IS_PANEL) globalThis.__vtxHandleFrameMessage = handleFrameMessage;
+  else window.addEventListener('message', (e) => {
+    // Com o painel nativo aberto, a seleção vai para o painel; esta instância fica oculta.
+    if (panelIsActive()) {
+      const fromPreview = String(e.origin).endsWith('.lovable.app') || String(e.origin).endsWith('.lovableproject.com');
+      if (fromPreview && e.data && typeof e.data.type === 'string' && e.data.type.startsWith('VTX_FRAME_'))
+        chrome.runtime.sendMessage({ type: 'vtx-frame-message', origin: e.origin, data: e.data }).catch?.(() => {});
+      return;
+    }
+    handleFrameMessage(e.origin, e.data);
   });
 
   // ── Anexos: imagem de referência ou arquivo de texto ───────────────
@@ -3030,6 +3057,7 @@
   }
   async function restoreAgentJobs() {
     if (restoringAgentJobs || activeEdit || !ghActiveRepo || repoResolvedProjectKey!==getProjectContextKey()) return;
+    if (!IS_PANEL && panelIsActive()) return; // o painel nativo é quem entrega os resultados
     restoringAgentJobs=true;
     try {
       const owner=await planOwner();const all=await chrome.storage.local.get(null);
@@ -3058,7 +3086,7 @@
     }
     try {
       const {job}=await jobRequest(ticket,'job_diagnostic');
-      const report=['Vertex Pro 3.5.16',`Comando: ${job.id}`,`Projeto: ${job.repo}`,`Estado: ${job.status}`,`Etapa: ${job.stage}`,`Commit: ${job.commit_sha || 'não registrado'}`,`Link: ${job.commit_url || '-'}`,`Início: ${job.created_at}`,`Atualização: ${job.updated_at}`,`Código: ${job.error_code || '-'}`,`Erro: ${job.error_message || '-'}`,
+      const report=['Vertex Pro 3.6.0',`Comando: ${job.id}`,`Projeto: ${job.repo}`,`Estado: ${job.status}`,`Etapa: ${job.stage}`,`Commit: ${job.commit_sha || 'não registrado'}`,`Link: ${job.commit_url || '-'}`,`Início: ${job.created_at}`,`Atualização: ${job.updated_at}`,`Código: ${job.error_code || '-'}`,`Erro: ${job.error_message || '-'}`,
         ...(job.events || []).map(x=>`${x.at}: ${x.stage}`)].join('\n');
       try {await navigator.clipboard.writeText(report);} catch(_) {
         const input=document.createElement('textarea');input.value=report;input.style.cssText='position:fixed;left:-9999px;top:0';document.body.appendChild(input);input.select();
@@ -3501,6 +3529,7 @@
   root.querySelectorAll('[data-db-close]').forEach(b => b.addEventListener('click', dbClose));
 
   function detectSupabaseProjectRefs() {
+    if (IS_PANEL) return Array.isArray(PG.supabaseRefs) ? PG.supabaseRefs : [];
     const refs = new Set();
     if (location.hostname !== 'lovable.dev' || !getLovableProjectId()) return [];
     const view = new URLSearchParams(location.search);
@@ -3561,7 +3590,7 @@
 
   // A rota Cloud é uma SPA: observar seus links quando o cartão for renderizado.
   setInterval(async () => {
-    if (!isLicensed || dbResolving || location.hostname !== 'lovable.dev') return;
+    if (!isLicensed || dbResolving || PG.hostname !== 'lovable.dev') return;
     const refs = detectSupabaseProjectRefs();
     const signature = `${getProjectContextKey()}:${refs.join(',')}`;
     if (!refs.length || signature === dbDetectionSignature) return;
@@ -3930,10 +3959,19 @@
     return scored[0] && scored[0].score > -50 ? scored[0].btn : null;
   }
 
+  async function hasLovableComposer() {
+    return IS_PANEL ? !!(await callPage('hasLovableComposer').catch(() => false)) : !!findLovableComposer();
+  }
+  async function sendViaLovable(text) {
+    if (!IS_PANEL) return sendViaLovableNative(text);
+    const ok = !!(await callPage('sendViaLovableNative', text).catch(() => false));
+    if (!ok) composerNotice('Não encontrei o chat da Lovable nessa aba. Abra o projeto e tente de novo.');
+    return ok;
+  }
   async function sendViaLovableNative(text) {
     const composer = findLovableComposer();
     if (!composer) {
-      composerNotice('Não encontrei o chat da Lovable nessa aba. Abra o projeto e tente de novo.');
+      if (!IS_PANEL) composerNotice('Não encontrei o chat da Lovable nessa aba. Abra o projeto e tente de novo.');
       return false;
     }
     setNativeValue(composer, text);
@@ -4049,7 +4087,7 @@
     }
 
     if (modo === 'lovable') {
-      if (!findLovableComposer()) {
+      if (!(await hasLovableComposer())) {
         composerNotice('Não encontrei o chat da Lovable nessa aba. Abra o projeto e tente de novo.');
         if (isDocked()) await hideDockThinking();
         return;
@@ -4070,7 +4108,7 @@
       }
       composerInput.value = '';
       setComposerSendState('loading');
-      const ok = await sendViaLovableNative(text);
+      const ok = await sendViaLovable(text);
       setComposerSendState(ok ? 'sent' : 'idle');
       if (isDocked()) {
         await hideDockThinking();
@@ -4098,7 +4136,7 @@
 
   // ── Refresh / Histórico / Ajuda (menu "...") ───────────────────────
   root.querySelector('#nextRefreshBtn')?.addEventListener('click', () => {
-    location.reload();
+    if (IS_PANEL) chrome.tabs.reload(globalThis.VTX_PAGE.tabId()); else location.reload();
   });
   root.querySelector('#nextHistoryMenuBtn')?.addEventListener('click', () => {
     root.querySelector('#nextMorePopover').style.display = 'none';
@@ -4165,7 +4203,7 @@
   // ══════════════════════════════════════════════════════════════════
   const shieldBtn = root.querySelector('#nextDockShield');
   // Cada carregamento começa protegido; só o clique libera esta sessão.
-  let chatBloqueado = location.hostname === 'lovable.dev';
+  let chatBloqueado = PG.hostname === 'lovable.dev';
   let blockOverlay = null;
   let blockPoll = null;
 
@@ -4271,12 +4309,12 @@
   function aplicarEstadoBloqueio(ligado, avisar) {
     chatBloqueado = !!ligado;
     if (chatBloqueado) {
-      ativarBloqueio();
+      if (IS_PANEL) callPage('setChatBlock', true).catch(() => {}); else ativarBloqueio();
       shieldBtn?.classList.add('ativo');
       shieldBtn?.setAttribute('title', 'Desbloquear o chat da Lovable');
       if (avisar) showDockToast('Chat da Lovable bloqueado.');
     } else {
-      desativarBloqueio();
+      if (IS_PANEL) callPage('setChatBlock', false).catch(() => {}); else desativarBloqueio();
       shieldBtn?.classList.remove('ativo');
       shieldBtn?.setAttribute('title', 'Bloquear o chat da Lovable');
       if (avisar) showDockToast('Chat da Lovable liberado.');
@@ -4311,4 +4349,91 @@
     app.style.left = `${x}px`; app.style.top = `${y}px`;
   });
   document.addEventListener('mouseup', () => { dragging = false; });
+
+  // ============================================================================
+  // PAINEL LATERAL NATIVO (Chrome side panel)
+  // ============================================================================
+  // Lado da página (content script): responde ao painel e se esconde enquanto
+  // o painel nativo da mesma aba estiver aberto.
+  const PANEL_ALIVE_KEY = 'vertex_panel_alive';
+  let myTabId = null;
+  let panelAliveTs = 0;
+  const PANEL_TTL = 5000;
+  function panelIsActive() {
+    return !IS_PANEL && myTabId != null && (Date.now() - panelAliveTs) < PANEL_TTL;
+  }
+  function syncPanelVisibility() {
+    root.classList.toggle('vtx-panel-active', panelIsActive());
+  }
+  function readAlive(map) {
+    const ts = map && myTabId != null ? Number(map[myTabId]) : 0;
+    panelAliveTs = Number.isFinite(ts) ? ts : 0;
+    syncPanelVisibility();
+  }
+
+  if (!IS_PANEL) {
+    try {
+      chrome.runtime.sendMessage({ type: 'vtx-whoami' }).then((r) => {
+        myTabId = r?.tabId ?? null;
+        return chrome.storage.local.get([PANEL_ALIVE_KEY]);
+      }).then((st) => readAlive(st?.[PANEL_ALIVE_KEY])).catch(() => {});
+      chrome.storage.onChanged.addListener((ch, area) => {
+        if (area === 'local' && ch[PANEL_ALIVE_KEY]) readAlive(ch[PANEL_ALIVE_KEY].newValue);
+      });
+      setInterval(syncPanelVisibility, 2000);
+    } catch (_) {}
+
+    const pageFns = {
+      findCurrentProjectRepo: (repos) => findCurrentProjectRepoLocal(repos),
+      postToFrame: (type) => postToFrame(type),
+      hasLovableComposer: () => !!findLovableComposer(),
+      sendViaLovableNative: (text) => sendViaLovableNative(text),
+      setChatBlock: (v) => { chatBloqueado = !!v; if (v) ativarBloqueio(); else desativarBloqueio(); return true; },
+    };
+    const pageState = () => ({
+      href: location.href, hostname: location.hostname, pathname: location.pathname,
+      search: location.search, origin: location.origin,
+      supabaseRefs: (() => { try { return detectSupabaseProjectRefs(); } catch (_) { return []; } })(),
+    });
+    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+      if (message?.type === 'vtx-page-state') { sendResponse(pageState()); return false; }
+      if (message?.type === 'vtx-page-call') {
+        const fn = pageFns[message.fn];
+        if (!fn) { sendResponse({ ok: false, error: 'fn' }); return false; }
+        Promise.resolve().then(() => fn(...(message.args || [])))
+          .then((value) => sendResponse({ ok: true, value }))
+          .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+        return true;
+      }
+      return false;
+    });
+  }
+
+  // Lado do painel: mostra o app em tela cheia, já ancorado.
+  if (IS_PANEL) {
+    root.classList.add('vtx-in-panel');
+    applyDockMode(true);
+    chrome.storage.local.get(['vertex_license_key', 'vertex_profile']).then((saved) => {
+      if (saved.vertex_license_key && saved.vertex_profile) {
+        app.style.display = 'flex';
+      } else {
+        licenseModal.style.display = 'flex';
+      }
+    }).catch(() => { app.style.display = 'flex'; });
+    // Menu: voltar para o painel dentro da página (celular/fallback).
+    const more = root.querySelector('#nextMorePopover');
+    if (more) {
+      const b = document.createElement('button');
+      b.className = 'next-popover-item';
+      b.id = 'nextOpenInPageBtn';
+      b.innerHTML = '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="15" y1="4" x2="15" y2="20"/></svg><span>Abrir dentro da página</span>';
+      b.addEventListener('click', async () => {
+        const tabId = globalThis.VTX_PAGE.tabId();
+        try { await chrome.sidePanel.setOptions({ tabId, enabled: false }); } catch (_) {}
+        setTimeout(() => { chrome.tabs.sendMessage(tabId, { type: 'toggle-panel' }).catch(() => {}); }, 700);
+        window.close();
+      });
+      more.appendChild(b);
+    }
+  }
 })();
