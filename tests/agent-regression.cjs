@@ -4,7 +4,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const { stripTypeScriptTypes } = require('node:module');
-const source = ['aurora-engine.ts','agent-jobs.ts','validation-workflow.ts','plan-validation.ts','undo-commit.ts','index.ts'].map(f => stripTypeScriptTypes(fs.readFileSync(path.join(__dirname, '../supabase/functions/github-ai-edit/'+f), 'utf8').replace(/^import .*;\n/gm, '').replace(/^export \{.*\};\n/gm,'').replace(/^export /gm,''))).join('\n');
+const source = ['aurora-engine.ts','site-design.ts','agent-jobs.ts','validation-workflow.ts','plan-validation.ts','undo-commit.ts','index.ts'].map(f => stripTypeScriptTypes(fs.readFileSync(path.join(__dirname, '../supabase/functions/github-ai-edit/'+f), 'utf8').replace(/^import .*;\n/gm, '').replace(/^export \{.*\};\n/gm,'').replace(/^export /gm,''))).join('\n');
 async function scenario(mode = 'complete', requireValidation = false, execution = undefined) {
   const files = { 'src/a.js': 'const title = "old";', 'src/b.js': 'const enabled = false;' };
   if(mode==='engine-discover')files['src/account/service.js']='const session = true;';

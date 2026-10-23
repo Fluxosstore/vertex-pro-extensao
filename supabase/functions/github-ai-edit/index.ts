@@ -1,6 +1,7 @@
 import { createAuroraEngine } from "./aurora-engine.ts";
 import { handleAgentJob, recordPublishedJob } from "./agent-jobs.ts";
 import { undoPublishedCommit } from "./undo-commit.ts";
+import { isSiteBuildRequest, DESIGN_GUIDE, DESIGN_LIGHT, resolveImageUrls } from "./site-design.ts";
 import { validationService } from "./plan-validation.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { parse as babelParse } from "npm:@babel/parser@7.24.7";
@@ -31,6 +32,7 @@ const PALAVRAS_COMPLEXAS = [
 function classificarComplexidade(prompt: string): boolean {
   const texto = prompt.toLowerCase();
   if (prompt.length > 220) return true;
+  if (isSiteBuildRequest(prompt)) return true; // criar/refazer site usa o modelo forte
   return PALAVRAS_COMPLEXAS.some((p) => texto.includes(p));
 }
 
@@ -1423,7 +1425,7 @@ REGRAS:
 
 Você pode investigar antes de editar. Se faltar código, responda {"request_files":["caminho/existente.tsx"], "reason":"por que precisa ler"} SEM files. O servidor lê esses arquivos e você continua nesta mesma execução. Peça também arquivos de referência que precisa promover a editáveis; não adivinhe seu conteúdo. Limite de três rodadas de leitura adicional por pedido, respeitando o tempo e o contexto disponíveis. Não solicite arquivos que já aparecem nos arquivos atuais. Quando as leituras forem encerradas, finalize com o código disponível ou explique em note o que não conseguiu concluir, sem inventar conteúdo.
 Execute as tarefas em até três etapas coerentes. Cada etapa deve preservar sintaxe e imports válidos; crie dependências na mesma etapa que as importa. Devolva continue_work:true quando houver tarefas a continuar. Os arquivos da próxima rodada já conterão suas trocas anteriores: não repita alterações. Sempre devolva tasks com id, status (prepared ou pending), files (arquivos alterados que sustentam a tarefa) e detail (pendências). Marque testes/build, banco e configurações externas como pending: não foram executados aqui.
-Responda em JSON: {"tasks":[{"id":"step-1","status":"prepared","files":["arquivo existente"],"detail":"..."}], "continue_work":false, "raciocinio":"breve", "commit_message":"...", "files":[{"path":"arquivo existente", "edits":[{"old_text":"trecho exato", "new_text":"trecho novo"}]}, {"path":"arquivo novo", "content":"arquivo inteiro"}], "note":"opcional"}. Para cada arquivo, forneça edits OU content, nunca os dois.`;
+Responda em JSON: {"tasks":[{"id":"step-1","status":"prepared","files":["arquivo existente"],"detail":"..."}], "continue_work":false, "raciocinio":"breve", "commit_message":"...", "files":[{"path":"arquivo existente", "edits":[{"old_text":"trecho exato", "new_text":"trecho novo"}]}, {"path":"arquivo novo", "content":"arquivo inteiro"}], "note":"opcional"}. Para cada arquivo, forneça edits OU content, nunca os dois.` + (isSiteBuildRequest(prompt) ? DESIGN_GUIDE : DESIGN_LIGHT);
 
     const filesBlock = () => Object.entries(fileContents)
       .map(([path, content]) => `### ${path}\n\`\`\`\n${content}\n\`\`\``)
@@ -1434,7 +1436,7 @@ Responda em JSON: {"tasks":[{"id":"step-1","status":"prepared","files":["arquivo
       : "";
     const rememberedPageBlock = usingRememberedPage
       ? `\n\nO pedido atual não nomeou uma página. A última edição concluída foi em ${JSON.stringify(lastEditedPage)}; limite-se a essa página. Se o elemento ou texto pedido não existir nela, informe que não o encontrou em vez de inventar outra alteração.` : "";
-    const editUser = () => `Alvo selecionado: ${JSON.stringify(selectedElement ? {tag:selectedElement.tag,attributes:selectedElement.attributes,nearbyText:selectedElement.nearbyText,file:locatorResult?.path} : null)}. Respeite o elemento, não adicione a imagem em outra tela.\n\nImagens conhecidas no projeto e anexos preparados: ${JSON.stringify(assetInventory)}. Não invente fotos ou caminhos. Se faltarem imagens obrigatórias, declare exatamente o que precisa ser anexado; não substitua fotos por silhuetas como entrega concluída.\n\nPedido: "${prompt}"${rememberedPageBlock}${attachedTextContext}${engine.customContext}${historyBlock}${preferencesBlock}${imageAssetContext}\n\nArquivos atuais:\n\n${filesBlock()}${referenceBlock()}\n\nTarefas (prepared significa código preparado, nunca executado/publicado): ${JSON.stringify(taskPlan)}\n\nCaminhos disponíveis para request_files (arquivos atuais omitidos):\n${candidatePaths.filter(p=>!Object.hasOwn(fileContents,p)).join("\n")}\n\nRodadas adicionais restantes: ${Math.max(0,MAX_ADDITIONAL_READ_ROUNDS-extraReads)}.`;
+    const editUser = () => `Alvo selecionado: ${JSON.stringify(selectedElement ? {tag:selectedElement.tag,attributes:selectedElement.attributes,nearbyText:selectedElement.nearbyText,file:locatorResult?.path} : null)}. Respeite o elemento, não adicione a imagem em outra tela.\n\nImagens conhecidas no projeto e anexos preparados: ${JSON.stringify(assetInventory)}. Não invente caminhos locais de arquivos. Se faltarem imagens obrigatórias, use fotos de banco gratuito por URL conforme as regras de design (verificadas pelo servidor); só peça anexo quando o usuário exigir uma foto específica dele; não substitua fotos por silhuetas como entrega concluída.\n\nPedido: "${prompt}"${rememberedPageBlock}${attachedTextContext}${engine.customContext}${historyBlock}${preferencesBlock}${imageAssetContext}\n\nArquivos atuais:\n\n${filesBlock()}${referenceBlock()}\n\nTarefas (prepared significa código preparado, nunca executado/publicado): ${JSON.stringify(taskPlan)}\n\nCaminhos disponíveis para request_files (arquivos atuais omitidos):\n${candidatePaths.filter(p=>!Object.hasOwn(fileContents,p)).join("\n")}\n\nRodadas adicionais restantes: ${Math.max(0,MAX_ADDITIONAL_READ_ROUNDS-extraReads)}.`;
 
     function validarSintaxeReal(caminho: string, conteudo: string): string | null {
       if (/\.json$/.test(caminho)) {
@@ -1682,6 +1684,7 @@ Responda em JSON: {"tasks":[{"id":"step-1","status":"prepared","files":["arquivo
       }
 
       await report("checking");
+      try { await resolveImageUrls(editedFiles); } catch (_) { /* melhor esforço */ }
       let problemaEncontrado = "";
       for (const f of editedFiles) {
         if (novosArquivosSet.has(f.path)) continue;

@@ -2,7 +2,7 @@
 const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path'),assert=require('node:assert/strict'),crypto=require('node:crypto');
 const {stripTypeScriptTypes}=require('node:module');
 const folder=path.join(__dirname,'../supabase/functions/github-ai-edit');
-const code=['aurora-engine.ts','validation-workflow.ts','plan-validation.ts','undo-commit.ts','index.ts'].map(f=>stripTypeScriptTypes(fs.readFileSync(path.join(folder,f),'utf8').replace(/^import .*;\n/gm,'').replace(/^export \{.*\};\n/gm,'').replace(/^export /gm,''))).join('\n');
+const code=['aurora-engine.ts','site-design.ts','validation-workflow.ts','plan-validation.ts','undo-commit.ts','index.ts'].map(f=>stripTypeScriptTypes(fs.readFileSync(path.join(folder,f),'utf8').replace(/^import .*;\n/gm,'').replace(/^export \{.*\};\n/gm,'').replace(/^export /gm,''))).join('\n');
 const base='a'.repeat(40),change='c'.repeat(40),revert='e'.repeat(40),other='f'.repeat(40),baseTree='b'.repeat(40),newTree='d'.repeat(40);
 const hash=value=>crypto.createHash('sha256').update(JSON.stringify(value)).digest('base64url');
 const sign=value=>{const p=Buffer.from(JSON.stringify(value)).toString('base64url');return p+'.'+crypto.createHmac('sha256','test-only').update(p).digest('base64url')};
